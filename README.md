@@ -149,8 +149,8 @@ sequenceDiagram
         
         Frontend->>Backend: POST /verify-2fa { token, user }
         
-        Backend->>Auth: POST /verify (backend-to-backend)
-        Note over Backend,Auth: Payload: { token, secret, user }
+        Backend->>Auth: POST /login (backend-to-backend)
+        Note over Backend,Auth: Payload: { user, token }
         Auth-->>Backend: { success: true }
     end
     
@@ -172,8 +172,7 @@ sequenceDiagram
     Note over U, DB: Setup Inicial (Ativação MFA)
     U->>App: Quero ativar 2FA
     App->>Auth: POST /setup { user: "u@email.com" }
-    Auth-->>App: { secret, qrCode, recoveryCodes }
-    App->>DB: Salva "secret" (Encriptado)
+    Auth-->>App: { qrCode, recoveryCodes }
     App-->>U: Exibe QR Code e Recovery Codes
 
     Note over U, DB: Fluxo de Login (Validação)
