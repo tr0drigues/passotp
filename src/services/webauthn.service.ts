@@ -10,6 +10,7 @@ import redis from '../lib/redis.js';
 
 // Configuration
 const RP_ID = process.env.WEBAUTHN_RP_ID || 'localhost';
+const RP_NAME = process.env.WEBAUTHN_RP_NAME || 'SecureAuth-2FA';
 const ORIGIN = process.env.WEBAUTHN_ORIGIN || 'http://localhost';
 
 // [HARDENING] User Verification is safer by default in Production

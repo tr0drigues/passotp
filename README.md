@@ -181,11 +181,10 @@ sequenceDiagram
     App->>DB: Valida credenciais primárias
     App-->>U: Solicita Código MFA
     U->>App: Envia Token (6 dígitos)
-    App->>DB: Busca "secret" do usuário
-    App->>Auth: POST /verify { token, secret }
+    App->>Auth: POST /login { user, token }
     alt Token Válido
         Auth-->>App: { success: true }
-        App-->>U: Login Sucesso + Sessão
+        App-->>U: Login Sucesso + Sessão Criada
     else Token Inválido
         Auth-->>App: 400 Bad Request
         App-->>U: Erro "Código Inválido"
