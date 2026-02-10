@@ -78,12 +78,12 @@ fastify.post('/login', async (request, reply) => {
     });
 
     // 1. Check Rate Limit
-    const allowed = await securityService.checkRateLimit(userIdentifier);
+    const { allowed, banExpires } = await securityService.checkRateLimit(userIdentifier);
     if (!allowed) {
-        logger.warn({ event: 'RATE_LIMIT', message: 'Rate limit exceeded', user, ip });
+        logger.warn({ event: 'RATE_LIMIT', message: 'Rate limit exceeded', user, ip, banExpires });
         return reply.status(429).send({
             success: false,
-            message: 'Muitas tentativas. Tente novamente em alguns minutos.'
+            message: `Muitas tentativas. Tente novamente em ${Math.ceil(banExpires!)} segundos.`
         });
     }
 

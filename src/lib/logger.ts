@@ -8,7 +8,7 @@ interface LogPayload {
     ip?: string;
     userAgent?: string;
     message: string;
-    meta?: Record<string, any>;
+    meta?: Record<string, any> & { banExpires?: number };
 }
 
 class SecurityLogger {
