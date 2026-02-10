@@ -18,9 +18,17 @@ async function main() {
     });
 
     if (!setupRes.ok) throw new Error(`Setup failed: ${setupRes.status}`);
-    const setupData = await setupRes.json();
-    const { secret } = setupData;
-    console.log('✅ Setup successful. Secret received:', secret);
+    if (!setupRes.ok) throw new Error(`Setup failed: ${setupRes.status}`);
+
+    // Secret is no longer returned in /setup. Fetch from Redis for E2E testing.
+    const redisDataInit = await redis.hgetall(`user:${USER}`);
+    if (!redisDataInit || !redisDataInit.secret) throw new Error('User not found in Redis');
+
+    // We need to decrypt it to use it
+    const { encryptionService } = await import('../src/services/encryption.service.js'); // Dynamic import
+    const secret = encryptionService.decrypt(redisDataInit.secret);
+
+    console.log('✅ Setup successful. Secret fetched from Redis (Decrypted for test):', secret);
 
     // 2. VERIFY ENCRYPTION IN REDIS
     console.log('\n--- 2. Verify Encryption ---');

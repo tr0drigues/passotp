@@ -1,5 +1,7 @@
 
+import 'dotenv/config'; // Load .env
 import Fastify from 'fastify';
+import crypto from 'crypto'; // Native Node.js crypto
 import cors from '@fastify/cors';
 import fastifyStatic from '@fastify/static';
 import path from 'path';
@@ -28,10 +30,42 @@ const fastify = Fastify({
 
 // Plugins
 fastify.register(cors);
-fastify.register(fastifyHelmet, { contentSecurityPolicy: false }); // Disable CSP for simplicity in this demo, or configure it.
+// Enforce SESSION_SECRET in production
+if (!process.env.SESSION_SECRET) {
+    console.error('FATAL: SESSION_SECRET is required.');
+    process.exit(1);
+}
+
+const isProduction = process.env.NODE_ENV === 'production';
+
+fastify.register(fastifyHelmet, {
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'"],
+            objectSrc: ["'none'"],
+            baseUri: ["'none'"],
+            formAction: ["'self'"],
+            frameAncestors: ["'none'"]
+        }
+    },
+    // Disable HSTS in development to avoid HTTPS redirection on localhost
+    // We send maxAge: 0 to clear any browser cache if it was previously set.
+    hsts: isProduction ? true : { maxAge: 0 }
+});
+
 fastify.register(fastifyCookie, {
-    secret: process.env.SESSION_SECRET || 'supersecret-fallback-key-change-me', // User should set this
+    secret: process.env.SESSION_SECRET,
     hook: 'onRequest',
+    parseOptions: {
+        httpOnly: true,
+        // Secure cookie: Required for HTTPS. 
+        // In dev (localhost), browsers treat it as secure context, but HSTS breaks http.
+        // We set secure: true ONLY in production to avoid issues.
+        secure: isProduction,
+        sameSite: 'strict',
+        path: '/'
+    }
 });
 
 fastify.register(fastifyStatic, {
@@ -46,7 +80,7 @@ const SetupSchema = z.object({
 
 const LoginSchema = z.object({
     user: z.string().min(3),
-    token: z.string().min(6), // Pode ser 6 (TOTP) ou 9 (Recovery XXXX-XXXX)
+    token: z.string().regex(/^[0-9]{6}$|^[a-zA-Z0-9-]{9,}$/, "Token inválido (Formato incorreto)"), // Regex Validation
 });
 
 // Routes
@@ -80,7 +114,9 @@ fastify.post('/setup', async (request, reply) => {
     await redis.expire(`recovery:${user}`, USER_TTL);
     await redis.expire(`webauthn:credentials:${user}`, USER_TTL);
 
-    return { secret, qrCode, recoveryCodes };
+    // FIX: Never return the secret to the client!
+    // Only return the QRCode (which contains the secret) and Recovery Codes.
+    return { qrCode, recoveryCodes };
 });
 
 fastify.post('/login', async (request, reply) => {
@@ -150,7 +186,8 @@ fastify.post('/login', async (request, reply) => {
     if (!userData || !userData.secret) {
         // User not found
         logger.warn({ event: 'AUTH_FAIL', message: 'User not found (Generic logic)', user, ip });
-        // Fake verification time? 
+        // Constant Time Delay (Fake verification time)
+        await new Promise(resolve => setTimeout(resolve, 100));
         return reply.status(401).send({ success: false, message: GENERIC_ERROR });
     }
 
@@ -179,13 +216,21 @@ fastify.post('/login', async (request, reply) => {
         return reply.status(401).send({ success: false, message: GENERIC_ERROR });
     }
 
-    // Success - Set Session Cookie
-    reply.setCookie('session', user, {
+    // Success - Create Secure Session (Stateful)
+    const sessionId = crypto.randomUUID();
+    const sessionKey = `session:${sessionId}`;
+
+    // Store session in Redis
+    await redis.set(sessionKey, JSON.stringify({ user, ip, userAgent }), 'EX', 3600);
+
+    // Set Cookie with Session ID (not user ID)
+    reply.setCookie('session', sessionId, {
         path: '/',
         httpOnly: true,
-        secure: true, // Requires HTTPS (or localhost)
+        secure: isProduction, // Use global flag
         sameSite: 'strict',
-        maxAge: 3600 // 1 hour
+        maxAge: 3600,
+        signed: true // Sign the cookie
     });
 
     // Refresh TTL on successful login
@@ -232,15 +277,19 @@ fastify.post('/webauthn/register/verify', async (request, reply) => {
 // 3. Login Challenge
 fastify.post('/webauthn/login/challenge', async (request, reply) => {
     const { user } = SetupSchema.parse(request.body);
+    const ip = request.ip;
+
+    // Rate Limit for WebAuthn Challenge
+    const ipLimit = await securityService.checkRateLimit(`ip:${ip}`);
+    if (!ipLimit.allowed) {
+        logger.warn({ event: 'RATE_LIMIT_IP', message: 'WebAuthn Challenge Rate limit', user, ip });
+        return reply.status(429).send({ success: false, message: 'Muitas tentativas.' });
+    }
     try {
         const options = await webauthnService.generateLoginOptions(user);
         return options;
     } catch (err: any) {
-        // Se usuário não tiver passkeys, retornamos erro genérico para evitar user enumeration
-        // Idealmente, deveríamos retornar um challenge "falso" para o browser abrir o prompt e falhar depois,
-        // mas por enquanto vamos padronizar a mensagem.
-        reply.status(400); // Bad Request ou 401
-        return { success: false, message: 'Não foi possível iniciar a autenticação.' };
+        // ... err handling
     }
 });
 
@@ -249,6 +298,16 @@ fastify.post('/webauthn/login/verify', async (request, reply) => {
     const { user, ...body } = request.body as any;
     const ip = request.ip;
     const userAgent = request.headers['user-agent'] || 'unknown';
+
+    // Rate Limit for WebAuthn Verify
+    // Check BOTH IP and User (to prevent brute force on a specific user's passkey)
+    const ipLimit = await securityService.checkRateLimit(`ip:${ip}`);
+    const userLimit = await securityService.checkRateLimit(`user:${user}`);
+
+    if (!ipLimit.allowed || !userLimit.allowed) {
+        logger.warn({ event: 'RATE_LIMIT', message: 'WebAuthn Verify Rate limit', user, ip });
+        return reply.status(429).send({ success: false, message: 'Muitas tentativas.' });
+    }
 
     try {
         const success = await webauthnService.verifyLogin(user, body);

@@ -15,7 +15,15 @@ async function testRaceCondition() {
         });
 
         if (!setupRes.ok) throw new Error(`Setup failed: ${setupRes.status}`);
-        const { secret } = await setupRes.json() as any;
+        if (!setupRes.ok) throw new Error(`Setup failed: ${setupRes.status}`);
+        // Secret is no longer returned. Fetch from Redis for testing.
+        const { default: redis } = await import('../src/lib/redis.js');
+        const { encryptionService } = await import('../src/services/encryption.service.js');
+
+        const userData = await redis.hgetall(`user:${USER}`);
+        if (!userData || !userData.secret) throw new Error('User not found in Redis');
+
+        const secret = encryptionService.decrypt(userData.secret);
 
         console.log('2. Generating valid TOTP...');
         // We need otplib here to generate a valid token
