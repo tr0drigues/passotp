@@ -80,7 +80,7 @@ fastify.post('/login', async (request, reply) => {
     // 1. Check Rate Limit
     const { allowed, banExpires } = await securityService.checkRateLimit(userIdentifier);
     if (!allowed) {
-        logger.warn({ event: 'RATE_LIMIT', message: 'Rate limit exceeded', user, ip, banExpires });
+        logger.warn({ event: 'RATE_LIMIT', message: 'Rate limit exceeded', user, ip, meta: { banExpires } });
         return reply.status(429).send({
             success: false,
             message: `Muitas tentativas. Tente novamente em ${Math.ceil(banExpires!)} segundos.`
@@ -99,6 +99,7 @@ fastify.post('/login', async (request, reply) => {
                     method: 'RECOVERY_CODE',
                     user,
                     ip,
+                    userAgent,
                     timestamp: new Date().toISOString()
                 }
             };
@@ -145,6 +146,7 @@ fastify.post('/login', async (request, reply) => {
             method: 'TOTP_APP',
             user,
             ip,
+            userAgent,
             timestamp: new Date().toISOString()
         }
     };

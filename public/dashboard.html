@@ -179,6 +179,11 @@
                     <span class="label">Timestamp</span>
                     <span class="value" id="timeVal">...</span>
                 </div>
+                <div class="data-row">
+                    <span class="label">User Agent</span>
+                    <span class="value" id="uaVal"
+                        style="font-size: 0.7rem; max-width: 200px; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">...</span>
+                </div>
             </div>
 
             <button onclick="logout()">Sign Out</button>
@@ -203,6 +208,7 @@
         document.getElementById('methodVal').textContent = meta.method;
         document.getElementById('ipVal').textContent = meta.ip;
         document.getElementById('timeVal').textContent = new Date(meta.timestamp).toLocaleTimeString();
+        document.getElementById('uaVal').textContent = meta.userAgent || 'Unknown';
 
         function logout() {
             sessionStorage.removeItem('auth_meta');
