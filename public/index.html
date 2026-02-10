@@ -230,9 +230,21 @@
         .otp-input {
             text-align: center;
             font-size: 1.5rem;
-            letter-spacing: 0.5rem;
             font-weight: 700;
             color: var(--primary);
+            letter-spacing: 0.1rem;
+            transition: letter-spacing 0.3s;
+        }
+
+        .otp-input:not(:placeholder-shown) {
+            letter-spacing: 0.5rem;
+        }
+
+        .otp-input::placeholder {
+            font-size: 1rem;
+            font-weight: 400;
+            color: rgba(148, 163, 184, 0.5);
+            letter-spacing: normal;
         }
 
         /* Status Messages */
@@ -331,7 +343,7 @@
 
             <div id="step1" class="step">
                 <div class="input-group">
-                    <input type="email" id="username" placeholder="name@company.com" value="user@example.com">
+                    <input type="email" id="username" placeholder="name@company.com">
                 </div>
                 <button onclick="setup2FA()" id="btnSetup">
                     <span class="btn-text">Enable 2FA</span>

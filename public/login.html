@@ -155,9 +155,24 @@
         .otp-input {
             text-align: center;
             font-size: 1.5rem;
-            letter-spacing: 0.5rem;
             font-weight: 700;
             color: var(--primary);
+            letter-spacing: 0.1rem;
+            /* Reduzido para não quebrar placeholder */
+            transition: letter-spacing 0.3s;
+        }
+
+        /* Aumenta espaçamento apenas quando tem valor (foco ou preenchido seria ideal via JS, mas :not(:placeholder-shown) funciona em modernos) */
+        .otp-input:not(:placeholder-shown) {
+            letter-spacing: 0.5rem;
+        }
+
+        .otp-input::placeholder {
+            font-size: 1rem;
+            font-weight: 400;
+            color: rgba(148, 163, 184, 0.5);
+            letter-spacing: normal;
+            /* Normaliza placeholder */
         }
 
         button {
@@ -296,7 +311,7 @@
             <p class="subtitle">Please enter your authenticator code</p>
 
             <div class="input-group">
-                <input type="email" id="username" placeholder="name@company.com" value="user@example.com">
+                <input type="email" id="username" placeholder="name@company.com">
             </div>
 
             <div class="input-group">
