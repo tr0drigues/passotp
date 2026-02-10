@@ -9,11 +9,18 @@ import { logger } from '../lib/logger.js';
 import redis from '../lib/redis.js';
 
 // Configuration
-// Configuration
-const RP_NAME = process.env.WEBAUTHN_RP_NAME || 'SecureAuth-2FA';
 const RP_ID = process.env.WEBAUTHN_RP_ID || 'localhost';
 const ORIGIN = process.env.WEBAUTHN_ORIGIN || 'http://localhost';
-const REQUIRE_UV = process.env.WEBAUTHN_REQUIRE_UV === 'true'; // Default false if not set, but recommended true in prod
+
+// [HARDENING] User Verification is safer by default in Production
+const isProduction = process.env.NODE_ENV === 'production';
+let REQUIRE_UV = false;
+
+if (process.env.WEBAUTHN_REQUIRE_UV !== undefined) {
+    REQUIRE_UV = process.env.WEBAUTHN_REQUIRE_UV === 'true';
+} else {
+    REQUIRE_UV = isProduction; // Default: true in Prod, false in Dev
+}
 
 export class WebAuthnService {
 
