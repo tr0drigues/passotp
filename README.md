@@ -1,6 +1,6 @@
-# Sistema de Autenticação Moderno (TOTP + Passkeys) - Security by Design
+# Sistema de Autenticação (TOTP + Passkeys) - Security by Design
 
-Este projeto implementa um sistema robusto de Autenticação Multi-Fator (MFA) suportando **TOTP** (RFC 6238) e **WebAuthn/Passkeys** (FIDO2), seguindo rigorosamente os padrões de segurança da indústria e especificações IETF.
+Este projeto implementa um sistema de Autenticação Multi-Fator (MFA) suportando **TOTP** (RFC 6238) e **WebAuthn/Passkeys** (FIDO2), seguindo rigorosamente os padrões de segurança da indústria e especificações IETF.
 
 Desenvolvido com foco em segurança ("Security by Design"), performance e melhor experiência do desenvolvedor/usuário.
 
