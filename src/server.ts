@@ -173,14 +173,21 @@ fastify.post('/setup', async (request, reply) => {
 
     // Only return the QRCode (which contains the secret) and Recovery Codes.
     // [HARDENING] In production, NEVER return secret/otpAuth unless explicitly allowed for debugging.
+    // [FINAL REVIEW] Added Double-Lock: Must confirm knowledge of risk.
 
-    const allowDebugOutput = process.env.ALLOW_DEBUG_SETUP_OUTPUT === 'true';
+    const isDebugMode = process.env.ALLOW_DEBUG_SETUP_OUTPUT === 'true';
+    const confirmsRisk = process.env.I_KNOW_WHAT_IM_DOING === 'true';
+    const allowDebugOutput = isDebugMode && confirmsRisk;
 
     if (isProduction && !allowDebugOutput) {
         return {
             qrCode,
             recoveryCodes
         };
+    }
+
+    if (allowDebugOutput && isProduction) {
+        logger.warn({ event: 'SECURITY_ALERT', message: 'Debug output enabled in PRODUCTION', meta: { user } });
     }
 
     // Dev mode OR Explicit Debug allowed
@@ -196,10 +203,16 @@ fastify.post('/setup', async (request, reply) => {
 // In production, secrets are stored securely in Redis and verified via /login.
 // We disable this endpoint in production to prevent misuse, unless explicitly enabled for testing.
 fastify.post('/verify', async (request, reply) => {
-    const enableDevVerify = process.env.ENABLE_DEV_VERIFY_ENDPOINT === 'true';
+    const isDevVerify = process.env.ENABLE_DEV_VERIFY_ENDPOINT === 'true';
+    const confirmsRisk = process.env.I_KNOW_WHAT_IM_DOING === 'true';
+    const enableDevVerify = isDevVerify && confirmsRisk;
 
     if (isProduction && !enableDevVerify) {
         return reply.status(404).send({ error: 'Not Found', message: 'Endpoint disabled in production.' });
+    }
+
+    if (enableDevVerify && isProduction) {
+        logger.warn({ event: 'SECURITY_ALERT', message: 'Verify endpoint enabled in PRODUCTION', meta: { user: (request.body as any)['user'] } });
     }
 
     const { token, secret, user } = request.body as any; // Frontend sends plain secret
@@ -237,7 +250,7 @@ fastify.post('/login', async (request, reply) => {
         message: 'Login attempt',
         user, ip, userAgent
     });
-    console.log('[DEBUG] Login Request:', { user, tokenLength: token.length }); // Debug log
+    // console.log('[DEBUG] Login Request:', { user, tokenLength: token.length }); // [HARDENING] Removed debug log
 
     // 1. Check Rate Limit (Dual Layer: IP & User)
     // Layer 1: IP Rate Limit (DDoS / Brute Force protection)

@@ -10,9 +10,10 @@ export type SecurityEvent =
     | 'RATE_LIMIT_USER'
     | 'REPLAY_ATTACK'
     | 'SETUP_INIT'
-    | 'SETUP_COMPLETE' // Restored
+    | 'SETUP_COMPLETE'
     | 'RECOVERY_USE'
-    | 'SYSTEM_START';
+    | 'SYSTEM_START'
+    | 'SECURITY_ALERT'; // New for critical alerts
 
 interface LogPayload {
     event: SecurityEvent;

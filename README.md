@@ -128,6 +128,40 @@ sequenceDiagram
     Frontend->>User: Redireciona para Dashboard
 ```
 
+### Arquitetura de Referência (Integração com App Externa)
+
+Este diagrama ilustra como sua aplicação (Consumer App) deve interagir com o Auth Service em um cenário de **Backend-to-Backend**.
+
+```mermaid
+sequenceDiagram
+    participant U as 👤 Usuário
+    participant App as 📱 Consumer App (Backend)
+    participant Auth as 🛡️ Auth Service (MFA)
+    participant DB as 🗄️ App DB
+
+    Note over U, DB: Setup Inicial (Ativação MFA)
+    U->>App: Quero ativar 2FA
+    App->>Auth: POST /setup { user: "u@email.com" }
+    Auth-->>App: { secret, qrCode, recoveryCodes }
+    App->>DB: Salva "secret" (Encriptado)
+    App-->>U: Exibe QR Code e Recovery Codes
+
+    Note over U, DB: Fluxo de Login (Validação)
+    U->>App: Login (Email + Senha)
+    App->>DB: Valida credenciais primárias
+    App-->>U: Solicita Código MFA
+    U->>App: Envia Token (6 dígitos)
+    App->>DB: Busca "secret" do usuário
+    App->>Auth: POST /verify { token, secret }
+    alt Token Válido
+        Auth-->>App: { success: true }
+        App-->>U: Login Sucesso + Sessão
+    else Token Inválido
+        Auth-->>App: 400 Bad Request
+        App-->>U: Erro "Código Inválido"
+    end
+```
+
 ### Endpoints Principais para Integração
 
 | Método | Endpoint | Descrição | Status em Prod |
