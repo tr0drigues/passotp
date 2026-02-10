@@ -130,13 +130,62 @@ sequenceDiagram
 
 ### Endpoints Principais para Integração
 
-| Método | Endpoint | Descrição | Integração Sugerida |
-|--------|----------|-----------|---------------------|
-| `POST` | `/setup` | Gera Segredo TOTP e QR Code | Chamado pelo seu Backend quando o usuário ativa 2FA. |
-| `POST` | `/verify` | Valida um token TOTP (6 dígitos) | Chamado pelo seu Backend a cada login. Seu Backend armazena o `secret`. |
-| `POST` | `/webauthn/*` | Fluxo completo de Passkeys | Chamado diretamente pelo Frontend (ou via proxy) para registro/login biométrico. |
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| `POST` | `/setup` | Gera Segredo TOTP, QR Code e Uri. |
+| `POST` | `/verify` | Valida um token TOTP (6 dígitos). |
 
-> **Nota**: Para **WebAuthn**, o `Auth Service` gerencia o estado das credenciais (public keys, counters) internamente no Redis, simplificando a lógica no seu Backend.
+> **Nota**: Para **WebAuthn**, o `Auth Service` gerencia o estado das credenciais internamente.
+
+## 📚 API Reference (Exemplos)
+
+### 1. Setup (Gerar Credenciais)
+Chamado pelo seu Backend quando o usuário ativa o 2FA.
+
+**Request:** `POST /setup`
+```json
+{
+  "user": "usuario@exemplo.com"
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "secret": "JBSWY3DPEHPK3PXP",       // Salve isso no seu Banco de Dados!
+  "otpAuth": "otpauth://totp/...",    // URI padrão (caso queira gerar seu próprio QR)
+  "qrCode": "data:image/png;base64,..", // Imagem pronta para exibir no Frontend
+  "recoveryCodes": ["A1B2-C3D4", ...] // Códigos de backup para o usuário salvar
+}
+```
+
+### 2. Verify (Validar Token)
+Chamado pelo seu Backend a cada login. Você deve enviar o `secret` que salvou anteriormente.
+
+**Request:** `POST /verify`
+```json
+{
+  "user": "usuario@exemplo.com",
+  "token": "123456",             // O código de 6 dígitos digitado pelo usuário
+  "secret": "JBSWY3DPEHPK3PXP"   // O segredo recuperado do seu Banco de Dados
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "message": "Código verificado com sucesso!"
+}
+```
+
+**Response (Erro - 400/401):**
+```json
+{
+  "success": false,
+  "message": "Código inválido."
+}
+```
 
 Ao levar esta arquitetura para produção (AWS, Azure, DigitalOcean), considere:
 

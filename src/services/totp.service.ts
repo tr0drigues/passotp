@@ -30,7 +30,9 @@ export class TotpService {
      * Nota: A verificação de replay e rate limit deve ser feita antes/depois no SecurityService
      */
     verifyToken(token: string, secret: string): boolean {
-        return authenticator.check(token, secret);
+        // window: 1 allows ±30 seconds (1 step) of clock skew. Important for user experience.
+        // Using 'any' cast for options as verify signature seems strict in installed version
+        return authenticator.check(token, secret) || authenticator.verify({ token, secret, window: 1 } as any);
     }
 
     /**

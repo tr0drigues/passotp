@@ -36,9 +36,12 @@ fastify.register(cors, {
         // Allow requests with no origin (like mobile apps or curl requests)
         if (!origin) return cb(null, true);
 
-        if (isProd) {
+        if (isProduction) {
             // In production, strictly allow only allowed origins
             const allowedOrigins = process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : [];
+            const frontendOrigin = process.env.FRONTEND_ORIGIN;
+            if (frontendOrigin) allowedOrigins.push(frontendOrigin);
+
             if (allowedOrigins.includes(origin)) {
                 return cb(null, true);
             }
@@ -109,6 +112,33 @@ const LoginSchema = z.object({
     user: z.string().min(3),
     token: z.string().regex(/^[0-9]{6}$|^[a-zA-Z0-9-]{9,}$/, "Token inválido (Formato incorreto)"), // Regex Validation
 });
+
+// Helper: Create Session
+// Standardizes session creation across all auth methods (TOTP, WebAuthn, Recovery)
+async function createSession(reply: any, user: string, ip: string, userAgent: string, method: string) {
+    const sessionId = crypto.randomUUID();
+    const sessionKey = `session:${sessionId}`;
+
+    // Store session in Redis
+    await redis.set(sessionKey, JSON.stringify({ user, ip, userAgent, method, createdAt: new Date().toISOString() }), 'EX', 3600);
+
+    // Set Cookie
+    reply.setCookie('session', sessionId, {
+        path: '/',
+        httpOnly: true,
+        secure: isProduction,
+        sameSite: 'lax',
+        maxAge: 3600,
+        signed: true
+    });
+
+    // Refresh User TTLs
+    await redis.expire(`user:${user}`, USER_TTL);
+    await redis.expire(`recovery:${user}`, USER_TTL);
+    await redis.expire(`webauthn:credentials:${user}`, USER_TTL);
+
+    return sessionId;
+}
 
 // Routes
 fastify.post('/setup', async (request, reply) => {
@@ -217,6 +247,10 @@ fastify.post('/login', async (request, reply) => {
         const isRecoveryValid = await recoveryService.validateAndConsumeCode(user, token);
         if (isRecoveryValid) {
             logger.warn({ event: 'RECOVERY_USE', message: 'User logged in with recovery code', user, ip });
+
+            // [UPDATE] Create Session for Recovery Login too
+            await createSession(reply, user, ip, userAgent, 'RECOVERY_CODE');
+
             return {
                 success: true,
                 message: 'Login realizado com Código de Recuperação!',
@@ -279,29 +313,10 @@ fastify.post('/login', async (request, reply) => {
         return reply.status(401).send({ success: false, message: GENERIC_ERROR });
     }
 
-    // Success - Create Secure Session (Stateful)
-    const sessionId = crypto.randomUUID();
-    const sessionKey = `session:${sessionId}`;
+    // Success - Create Secure Session (Standardized)
+    await createSession(reply, user, ip, userAgent, 'TOTP_APP');
 
-    // Store session in Redis
-    await redis.set(sessionKey, JSON.stringify({ user, ip, userAgent }), 'EX', 3600);
-
-    // Set Cookie with Session ID (not user ID)
-    reply.setCookie('session', sessionId, {
-        path: '/',
-        httpOnly: true,
-        secure: isProduction, // Use global flag
-        sameSite: 'lax',
-        maxAge: 3600,
-        signed: true // Sign the cookie
-    });
-
-    // Refresh TTL on successful login
-    await redis.expire(`user:${user}`, USER_TTL);
-    await redis.expire(`recovery:${user}`, USER_TTL);
-    await redis.expire(`webauthn:credentials:${user}`, USER_TTL);
-
-    logger.info({ event: 'AUTH_SUCCESS', message: 'User authenticated successfully', user, ip });
+    logger.info({ event: 'AUTH_SUCCESS_TOTP', message: 'User authenticated successfully', user, ip }); // Changed event name for clarity
     return {
         success: true,
         message: 'Login realizado com sucesso!',
@@ -320,14 +335,30 @@ fastify.post('/login', async (request, reply) => {
 
 // 1. Register Challenge
 fastify.post('/webauthn/register/challenge', async (request, reply) => {
-    const { user } = SetupSchema.parse(request.body); // Use SetupSchema (only user required)
+    const { user } = SetupSchema.parse(request.body);
+    const ip = request.ip;
+
+    // [UPDATE] Add Rate Limit for Register Challenge
+    const ipLimit = await securityService.checkRateLimit(`ip:${ip}`);
+    if (!ipLimit.allowed) {
+        return reply.status(429).send({ success: false, message: 'Muitas tentativas (Register Challenge).' });
+    }
+
     const options = await webauthnService.generateRegisterOptions(user);
     return options;
 });
 
 // 2. Register Verify
 fastify.post('/webauthn/register/verify', async (request, reply) => {
-    const { user, ...body } = request.body as any; // Body contains the attestation response
+    const { user, ...body } = request.body as any;
+    const ip = request.ip;
+
+    // [UPDATE] Add Rate Limit for Register Verify
+    const ipLimit = await securityService.checkRateLimit(`ip:${ip}`);
+    if (!ipLimit.allowed) {
+        return reply.status(429).send({ success: false, message: 'Muitas tentativas (Register Verify).' });
+    }
+
     try {
         const success = await webauthnService.verifyRegister(user, body);
         return { success, message: success ? 'Passkey salva com sucesso!' : 'Falha ao salvar Passkey.' };
@@ -368,14 +399,17 @@ fastify.post('/webauthn/login/verify', async (request, reply) => {
     const userLimit = await securityService.checkRateLimit(`user:${user}`);
 
     if (!ipLimit.allowed || !userLimit.allowed) {
-        logger.warn({ event: 'RATE_LIMIT', message: 'WebAuthn Verify Rate limit', user, ip });
+        logger.warn({ event: 'RATE_LIMIT_IP', message: 'WebAuthn Verify Rate limit', user, ip });
         return reply.status(429).send({ success: false, message: 'Muitas tentativas.' });
     }
 
     try {
         const success = await webauthnService.verifyLogin(user, body);
         if (success) {
-            logger.info({ event: 'AUTH_SUCCESS', message: 'User authenticated via WebAuthn', user, ip });
+            // [UPDATE] Create Session for WebAuthn Login
+            await createSession(reply, user, ip, userAgent, 'WEBAUTHN_PASSKEY');
+
+            logger.info({ event: 'AUTH_SUCCESS_WEBAUTHN', message: 'User authenticated via WebAuthn', user, ip });
             return {
                 success: true,
                 message: 'Login com Passkey realizado!',

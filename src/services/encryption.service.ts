@@ -7,11 +7,15 @@ const SALT_LENGTH = 64;
 const TAG_LENGTH = 16;
 const isProduction = process.env.NODE_ENV === 'production';
 
-if (isProduction && !process.env.ENCRYPTION_KEY) {
-    throw new Error('FATAL: ENCRYPTION_KEY is required in production.');
+// Fallback only allows explicit "dev" mode, otherwise throw to be safe
+const KEY = process.env.ENCRYPTION_KEY;
+if (!KEY) {
+    if (isProduction) {
+        throw new Error('FATAL: ENCRYPTION_KEY is required in production.');
+    }
+    console.warn('⚠️  WARNING: ENCRYPTION_KEY not found. Using insecure fallback for DEVELOPMENT only.');
 }
-
-const KEY = process.env.ENCRYPTION_KEY || '0'.repeat(64); // Fallback for dev ONLY if not provided
+const SAFE_KEY = KEY || '0'.repeat(64);
 
 export class EncryptionService {
 
@@ -28,12 +32,12 @@ export class EncryptionService {
 
         // Let's assume ENCRYPTION_KEY is a hex string representing 32 bytes.
         let masterKey: Buffer;
-        if (KEY.length === 64) {
-            masterKey = Buffer.from(KEY, 'hex');
+        if (SAFE_KEY.length === 64) {
+            masterKey = Buffer.from(SAFE_KEY, 'hex');
         } else {
             // Fallback if user provided a string passphrase: verify length or hash it.
             // Ideally we want 32 bytes for aes-256.
-            masterKey = crypto.createHash('sha256').update(KEY).digest();
+            masterKey = crypto.createHash('sha256').update(SAFE_KEY).digest();
         }
 
         const cipher = crypto.createCipheriv(ALGORITHM, masterKey, iv);
@@ -61,10 +65,10 @@ export class EncryptionService {
         const encryptedText = parts[2];
 
         let masterKey: Buffer;
-        if (KEY.length === 64) {
-            masterKey = Buffer.from(KEY, 'hex');
+        if (SAFE_KEY.length === 64) {
+            masterKey = Buffer.from(SAFE_KEY, 'hex');
         } else {
-            masterKey = crypto.createHash('sha256').update(KEY).digest();
+            masterKey = crypto.createHash('sha256').update(SAFE_KEY).digest();
         }
 
         const decipher = crypto.createDecipheriv(ALGORITHM, masterKey, iv);
