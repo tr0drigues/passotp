@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecureAuth | Login</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-glow: rgba(99, 102, 241, 0.4);
+            --bg-dark: #0f172a;
+            --surface: rgba(30, 41, 59, 0.7);
+            --text-main: #f8fafc;
+            --text-dim: #94a3b8;
+            --success: #10b981;
+            --error: #ef4444;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg-dark);
+            background-image:
+                radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
+                radial-gradient(at 100% 0%, rgba(236, 72, 153, 0.15) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(59, 130, 246, 0.15) 0px, transparent 50%);
+            background-attachment: fixed;
+            color: var(--text-main);
+            min-height: 100vh;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 440px;
+            padding: 2rem;
+            position: relative;
+        }
+
+        /* Glass Card */
+        .card {
+            background: var(--surface);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 24px;
+            padding: 2.5rem;
+            box-shadow:
+                0 25px 50px -12px rgba(0, 0, 0, 0.5),
+                inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+            position: relative;
+            z-index: 10;
+        }
+
+        /* Floating particles */
+        .particle {
+            position: absolute;
+            background: var(--primary);
+            border-radius: 50%;
+            opacity: 0.2;
+            z-index: 0;
+            filter: blur(60px);
+            animation: float 10s infinite ease-in-out;
+        }
+
+        .p1 {
+            top: -10%;
+            left: -10%;
+            width: 200px;
+            height: 200px;
+            animation-delay: 0s;
+            background: #6366f1;
+        }
+
+        .p2 {
+            bottom: -10%;
+            right: -10%;
+            width: 150px;
+            height: 150px;
+            animation-delay: -5s;
+            background: #ec4899;
+        }
+
+        @keyframes float {
+
+            0%,
+            100% {
+                transform: translate(0, 0);
+            }
+
+            50% {
+                transform: translate(20px, -20px);
+            }
+        }
+
+        h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin: 0 0 0.5rem 0;
+            background: linear-gradient(135deg, #fff 0%, #cbd5e1 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.02em;
+            text-align: center;
+        }
+
+        .subtitle {
+            color: var(--text-dim);
+            text-align: center;
+            margin-bottom: 2rem;
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+
+        .input-group {
+            position: relative;
+            margin-bottom: 1.5rem;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: var(--text-dim);
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        input {
+            width: 100%;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #fff;
+            padding: 1rem 1.2rem;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-family: 'Outfit', sans-serif;
+            transition: all 0.3s ease;
+            box-sizing: border-box;
+            outline: none;
+        }
+
+        input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15);
+            background: rgba(15, 23, 42, 0.8);
+        }
+
+        .otp-input {
+            text-align: center;
+            font-size: 1.5rem;
+            letter-spacing: 0.5rem;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        button {
+            width: 100%;
+            background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+            color: white;
+            border: none;
+            padding: 1rem;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(99, 102, 241, 0.4);
+        }
+
+        /* Status Messages */
+        #message {
+            margin-top: 1.5rem;
+            padding: 1rem;
+            border-radius: 12px;
+            font-size: 0.9rem;
+            text-align: center;
+            font-weight: 500;
+            animation: slideUp 0.3s ease;
+            display: none;
+        }
+
+        .success {
+            background: rgba(16, 185, 129, 0.2);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.2);
+        }
+
+        .error {
+            background: rgba(239, 68, 68, 0.2);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.2);
+        }
+
+        /* Loader */
+        .loader {
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+            display: none;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .btn-text {
+            transition: opacity 0.2s;
+        }
+
+        .loading .btn-text {
+            opacity: 0;
+        }
+
+        .loading .loader {
+            display: block;
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            margin: -10px 0 0 -10px;
+        }
+
+        .shake {
+            animation: shake 0.5s cubic-bezier(.36, .07, .19, .97) both;
+        }
+
+        @keyframes shake {
+
+            10%,
+            90% {
+                transform: translate3d(-1px, 0, 0);
+            }
+
+            20%,
+            80% {
+                transform: translate3d(2px, 0, 0);
+            }
+
+            30%,
+            50%,
+            70% {
+                transform: translate3d(-4px, 0, 0);
+            }
+
+            40%,
+            60% {
+                transform: translate3d(4px, 0, 0);
+            }
+        }
+
+        .link-text {
+            text-align: center;
+            margin-top: 1.5rem;
+            font-size: 0.9rem;
+        }
+
+        .link-text a {
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .link-text a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="particle p1"></div>
+    <div class="particle p2"></div>
+
+    <div class="container">
+        <div class="card">
+            <h1>Welcome Back</h1>
+            <p class="subtitle">Please enter your authenticator code</p>
+
+            <div class="input-group">
+                <input type="email" id="username" placeholder="name@company.com" value="user@example.com">
+            </div>
+
+            <div class="input-group">
+                <input type="text" id="token" class="otp-input" placeholder="000 000" maxlength="6" autocomplete="off">
+            </div>
+
+            <button onclick="doLogin()" id="btnLogin">
+                <span class="btn-text">Sign In</span>
+                <div class="loader"></div>
+            </button>
+
+            <div id="message"></div>
+
+            <div class="link-text">
+                Don't have 2FA set up? <a href="/">Configure here</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function setLoading(isLoading) {
+            const btn = document.getElementById('btnLogin');
+            if (isLoading) {
+                btn.classList.add('loading');
+                btn.disabled = true;
+            } else {
+                btn.classList.remove('loading');
+                btn.disabled = false;
+            }
+        }
+
+        async function doLogin() {
+            const username = document.getElementById('username').value;
+            const tokenInput = document.getElementById('token');
+            const token = tokenInput.value.replace(/\s/g, '');
+            const msg = document.getElementById('message');
+
+            if (!username || !token) return;
+
+            setLoading(true);
+            msg.style.display = 'none';
+
+            try {
+                const res = await fetch('/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user: username, token })
+                });
+                const data = await res.json();
+
+                await new Promise(r => setTimeout(r, 600)); // Animation delay
+
+                msg.textContent = data.message;
+                msg.style.display = 'block';
+                msg.className = data.success ? 'success' : 'error';
+
+                if (data.success) {
+                    tokenInput.style.borderColor = 'var(--success)';
+                    setTimeout(() => alert('Login Successful! Redirecting...'), 1000);
+                } else {
+                    tokenInput.style.borderColor = 'var(--error)';
+                    tokenInput.classList.add('shake');
+                    setTimeout(() => tokenInput.classList.remove('shake'), 500);
+                }
+
+            } catch (e) {
+                msg.textContent = 'Connection error';
+                msg.className = 'error';
+                msg.style.display = 'block';
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        document.getElementById('token').addEventListener('input', function (e) {
+            this.value = this.value.replace(/[^0-9]/g, '');
+        });
+    </script>
+</body>
+
+</html>
