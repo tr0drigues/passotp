@@ -324,6 +324,12 @@
                 <div class="loader"></div>
             </button>
 
+            <button onclick="loginWithPasskey()" id="btnPasskey"
+                style="margin-top: 1rem; background: transparent; border: 1px solid #6366f1; color: #6366f1;">
+                <span class="btn-text">🔑 Sign In with Passkey</span>
+                <div class="loader"></div>
+            </button>
+
             <div id="message"></div>
 
             <div class="link-text">
@@ -331,6 +337,9 @@
             </div>
         </div>
     </div>
+
+    <!-- SimpleWebAuthn Browser -->
+    <script src="/simplewebauthn.js"></script>
 
     <script>
         function setLoading(isLoading) {
@@ -391,6 +400,67 @@
                 msg.style.display = 'block';
             } finally {
                 setLoading(false);
+            }
+        }
+
+        async function loginWithPasskey() {
+            const { startAuthentication } = SimpleWebAuthnBrowser;
+            const input = document.getElementById('username');
+            const email = input.value;
+            const statusDiv = document.getElementById('message');
+
+            if (!email) {
+                input.focus();
+                input.style.borderColor = 'var(--error)';
+                return;
+            }
+
+            const btn = document.getElementById('btnPasskey');
+            btn.classList.add('loading');
+            btn.disabled = true;
+            statusDiv.style.display = 'none';
+
+            try {
+                // 1. Get Challenge
+                const resp = await fetch('/webauthn/login/challenge', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user: email })
+                });
+
+                if (!resp.ok) {
+                    const err = await resp.json();
+                    throw new Error(err.message || 'Falha ao iniciar login');
+                }
+                const options = await resp.json();
+
+                // 2. Browser Interaction
+                const authResp = await startAuthentication({ optionsJSON: options });
+
+                // 3. Verify
+                const verificationResp = await fetch('/webauthn/login/verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user: email, ...authResp })
+                });
+
+                const verificationJSON = await verificationResp.json();
+
+                if (verificationJSON.success) {
+                    sessionStorage.setItem('auth_meta', JSON.stringify(verificationJSON.meta));
+                    window.location.href = '/dashboard.html';
+                } else {
+                    throw new Error(verificationJSON.message);
+                }
+
+            } catch (error) {
+                console.error(error);
+                statusDiv.textContent = '❌ ' + error.message;
+                statusDiv.className = 'error';
+                statusDiv.style.display = 'block';
+            } finally {
+                btn.classList.remove('loading');
+                btn.disabled = false;
             }
         }
 

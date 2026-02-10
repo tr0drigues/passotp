@@ -22,6 +22,8 @@ Desenvolvido com foco em segurança ("Security by Design"), performance e melhor
 5.  **Recovery Codes**: Códigos de backup criptografados (bcrypt) para recuperação de conta.
 6.  **Security Obsevability**: Logs estruturados (JSON) com eventos de segurança (SIEM-ready).
 7.  **Context Awareness**: Monitoramento de IP e User-Agent para detecção de logins suspeitos.
+8.  **WebAuthn (Passkeys)**: Suporte completo a autenticação *passwordless* (FIDO2/WebAuthn) com validação de assinatura e proteção contra clonagem.
+
 
 ## 📦 Como Rodar
 
@@ -43,35 +45,58 @@ Desenvolvido com foco em segurança ("Security by Design"), performance e melhor
     docker-compose up -d
     ```
 
-3.  **Instale as dependências**
+3.  **Configure o Ambiente**
+    Crie um arquivo `.env` baseado no exemplo:
+    ```bash
+    cp .env.example .env
+    ```
+    *Dica: Para testar WebAuthn localmente, as configurações padrão funcionam. Em produção, você precisará de HTTPS e ajustar `WEBAUTHN_ORIGIN`.*
+
+4.  **Instale as dependências**
     ```bash
     npm install
     ```
 
-4.  **Inicie o servidor de desenvolvimento**
+5.  **Inicie o servidor de desenvolvimento**
     ```bash
     npm run dev
     ```
 
-5.  **Acesse a aplicação**
+6.  **Acesse a aplicação**
     Abra `http://localhost:3000` no seu navegador.
+    
+    *   **Login com Senha/TOTP**: Fluxo padrão.
+    *   **Login com Passkey**: Registre uma chave (TouchID/FaceID) no setup e use o botão "Sign In with Passkey".
+
+> **Nota sobre WebAuthn**: A API de Credenciais (Passkeys) requer um contexto seguro (HTTPS) ou `localhost`. Se você acessar via IP (ex: `192.168.x.x`), o navegador bloqueará o registro.
+
 
 ## 🧪 Como Testar
 
-### Fluxo de Usuário
+### Fluxo de Usuário (TOTP)
 1.  Acesse a página inicial para configurar o 2FA.
 2.  Digite seu e-mail e clique em "Enable 2FA".
 3.  Escaneie o QR Code com seu aplicativo autenticador.
 4.  Para validar o login recorrente, clique em "Log in here" no rodapé ou acesse `/login.html`.
 
-### Testes de Segurança Avançados
-Além da auditoria básica, você pode validar o fluxo de recuperação:
-```bash
-npx tsx scripts/test-recovery.ts
-```
-Isso testará: Geração de 10 códigos -> Setup -> Login com código -> Bloqueio de reutilização.
+### Fluxo de Usuário (WebAuthn / Passkeys)
+1.  No setup inicial, após digitar o email, clique em **"Registrar Passkey"**.
+2.  Siga as instruções do navegador (TouchID, FaceID, Windows Hello, etc).
+3.  Vá para a tela de Login (`/login.html`).
+4.  Digite o email e clique em **"🔑 Sign In with Passkey"**.
+5.  Valide sua biometria e entre sem senha.
 
-Para rodar a auditoria:
+### Testes de Segurança Avançados
+Além da auditoria básica, você pode validar o fluxo de recuperação e WebAuthn:
+```bash
+# Teste de Recuperação (TOTP + Recovery Codes)
+npx tsx scripts/test-recovery.ts
+
+# Teste E2E de WebAuthn (Simula TouchID virtual)
+npx tsx scripts/test-webauthn.ts
+```
+
+Para rodar a auditoria de segurança completa (Rate Limit, Injection, Replay):
 ```bash
 # Instale os navegadores do Playwright (apenas na primeira vez)
 npx playwright install chromium
@@ -80,14 +105,11 @@ npx playwright install chromium
 npx tsx scripts/security-audit.ts
 ```
 
-Este script irá verificar:
-- ✅ Se o Rate Limit bloqueia tentativas excessivas.
-- ✅ Se códigos duplicados (Replay Attack) são rejeitados.
-- ✅ Se o sistema resiste a injeção de inputs maliciosos.
-
 ### Dashboard de Validação (Developer Mode)
 Ao realizar o login com sucesso no ambiente de desenvolvimento, você será redirecionado para `dashboard.html`.
-Esta página exibe os metadados da sessão (Usuário, Método usado, IP) para confirmar se a autenticação ocorreu via **TOTP App** ou **Recovery Code**.
+Esta página exibe os metadados da sessão:
+- **Método**: `TOTP`, `RECOVERY_CODE` ou `WEBAUTHN_PASSKEY`.
+- **User Agent & IP**: Para conferência de fingerprinting.
 
 > **⚠️ Para Produção**:
 > Edite o arquivo `public/login.html` (linha ~360) e altere o redirecionamento:
@@ -104,17 +126,19 @@ Esta página exibe os metadados da sessão (Usuário, Método usado, IP) para co
 ### `POST /setup`
 Inicia o processo de vínculo 2FA.
 - **Body**: `{ "user": "email@exemplo.com" }`
-- **Retorno**: `{ "secret": "...", "qrCode": "data:image/..." }`
-- **Ação**: Gera um segredo único e o salva no Redis associado ao usuário.
+- **Retorno**: `{ "secret": "...", "qrCode": "data:image/...", "recoveryCodes": [...] }`
+- **Ação**: Gera segredo TOTP + Códigos de Recuperação e salva no Redis.
 
 ### `POST /login`
 Valida um token para login.
 - **Body**: `{ "user": "email@exemplo.com", "token": "123456" }`
-- **Retorno**: `{ "success": true, "message": "Login realizado..." }`
-- **Segurança**: Verifica o token contra o segredo salvo, aplica Rate Limit e checa Replay. Aceita também códigos de recuperação (formato XXXX-XXXX).
+- **Retorno**: `{ "success": true, "message": "Login realizado...", "meta": { ... } }`
+- **Segurança**: Verifica TOTP ou Recovery Code, aplica Rate Limit e checa Replay.
 
-### `POST /login/recovery` (Implícito no /login)
-O endpoint de login detecta automaticamente se o token é um código de recuperação. Se for, valida o hash e invalida o código.
+### `POST /webauthn/register/*` & `/webauthn/login/*`
+Endpoints para fluxo FIDO2 de registro e autenticação.
+- **Challenge**: Gera desafio criptográfico.
+- **Verify**: Valida assinatura do dispositivo e salva/autentica credencial.
 
 ## 📊 Logs de Auditoria
 

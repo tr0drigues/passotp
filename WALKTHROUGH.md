@@ -88,3 +88,16 @@ Implementamos uma lógica de "castigo progressivo". Diferente de um rate limit f
 ### 🕵️ Session Fingerprinting (Logto)
 O sistema agora registra a "impressão digital" da sessão (IP + User-Agent) no momento do login.
 Esses dados são exibidos no **Dashboard de Validação** para que o usuário possa confirmar se o acesso veio de um dispositivo legítimo.
+
+### 🔑 WebAuthn (Passkeys)
+Implementação completa de autenticação passwordless (FIDO2/WebAuthn):
+- **Registro**: Permite cadastrar TouchID, FaceID ou YubiKey na tela de setup.
+- **Login**: Novo botão "Entrar com Passkey" para autenticação segura e sem senha.
+- **Backend**: Utiliza `@simplewebauthn/server` com persistência em Redis.
+- **Segurança**: Validação de desafios (challenges) assinados criptograficamente, proteção contra replay (counters) e verificação de origem.
+
+## Próximos Passos Sugeridos
+1.  Implementar HTTPS (obrigatório para WebAuthn em produção, exceto localhost).
+2.  Adicionar suporte a múltiplos authenticators por usuário.
+3.  Implementar fluxo de revogação de Passkeys.
+

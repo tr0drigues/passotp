@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { totpService } from './services/totp.service.js';
 import { securityService } from './services/security.service.js';
 import { recoveryService } from './services/recovery.service.js'; // New Service
+import { webauthnService } from './services/webauthn.service.js'; // New Service
 import { logger } from './lib/logger.js'; // New Logger
 import redis from './lib/redis.js';
 
@@ -150,6 +151,70 @@ fastify.post('/login', async (request, reply) => {
             timestamp: new Date().toISOString()
         }
     };
+});
+
+
+// --- WebAuthn Routes ---
+
+// 1. Register Challenge
+fastify.post('/webauthn/register/challenge', async (request, reply) => {
+    const { user } = SetupSchema.parse(request.body); // Use SetupSchema (only user required)
+    const options = await webauthnService.generateRegisterOptions(user);
+    return options;
+});
+
+// 2. Register Verify
+fastify.post('/webauthn/register/verify', async (request, reply) => {
+    const { user, ...body } = request.body as any; // Body contains the attestation response
+    try {
+        const success = await webauthnService.verifyRegister(user, body);
+        return { success, message: success ? 'Passkey salva com sucesso!' : 'Falha ao salvar Passkey.' };
+    } catch (err: any) {
+        reply.status(400);
+        return { success: false, message: err.message };
+    }
+});
+
+// 3. Login Challenge
+fastify.post('/webauthn/login/challenge', async (request, reply) => {
+    const { user } = SetupSchema.parse(request.body);
+    try {
+        const options = await webauthnService.generateLoginOptions(user);
+        return options;
+    } catch (err: any) {
+        // Se usuário não tiver passkeys, retornamos 400 para o frontend saber e dar msg amigável
+        reply.status(400);
+        return { success: false, message: 'Nenhuma Passkey encontrada para este usuário.' };
+    }
+});
+
+// 4. Login Verify
+fastify.post('/webauthn/login/verify', async (request, reply) => {
+    const { user, ...body } = request.body as any;
+    const ip = request.ip;
+    const userAgent = request.headers['user-agent'] || 'unknown';
+
+    try {
+        const success = await webauthnService.verifyLogin(user, body);
+        if (success) {
+            logger.info({ event: 'AUTH_SUCCESS', message: 'User authenticated via WebAuthn', user, ip });
+            return {
+                success: true,
+                message: 'Login com Passkey realizado!',
+                meta: {
+                    method: 'WEBAUTHN_PASSKEY',
+                    user,
+                    ip,
+                    userAgent,
+                    timestamp: new Date().toISOString()
+                }
+            };
+        }
+        return reply.status(401).send({ success: false, message: 'Validação da Passkey falhou.' });
+    } catch (err: any) {
+        logger.warn({ event: 'AUTH_FAIL', message: 'WebAuthn logic error', user, ip, meta: { error: err.message } });
+        return reply.status(400).send({ success: false, message: err.message });
+    }
 });
 
 // Start

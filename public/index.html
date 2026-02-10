@@ -351,6 +351,21 @@
                 </button>
             </div>
 
+            <div id="passkeySection"
+                style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid rgba(255,255,255,0.1);">
+                <h3 style="font-size: 1.1rem; margin-bottom: 0.5rem; color: #cbd5e1;">Passkeys (WebAuthn)</h3>
+                <p style="font-size: 0.9rem; color: #94a3b8; margin-bottom: 1rem;">
+                    Configurar login sem senha (TouchID, FaceID).
+                </p>
+                <button onclick="registerPasskey()" id="btnPasskey"
+                    style="background: transparent; border: 1px solid #6366f1; color: #6366f1;">
+                    <span class="btn-text">Registrar Passkey</span>
+                    <div class="loader"></div>
+                </button>
+                <div id="passkeyStatus" class="status" style="display: none; margin-top: 1rem; font-size: 0.9rem;">
+                </div>
+            </div>
+
             <div id="step2" class="step hidden">
                 <div class="qr-card">
                     <img id="qrImage" class="qr-image" src="" alt="QR Code">
@@ -388,6 +403,9 @@
             </div>
         </div>
     </div>
+
+    <!-- SimpleWebAuthn Browser -->
+    <script src="/simplewebauthn.js"></script>
 
     <script>
         let currentSecret = '';
@@ -437,6 +455,63 @@
             } catch (e) { console.error(e); }
             finally { setLoading('btnSetup', false); }
         }
+
+        async function registerPasskey() {
+            const { startRegistration } = SimpleWebAuthnBrowser;
+            const input = document.getElementById('username');
+            const email = input.value;
+            const statusDiv = document.getElementById('passkeyStatus');
+
+            if (!email) {
+                input.focus();
+                input.style.borderColor = 'var(--error)';
+                return;
+            }
+
+            setLoading('btnPasskey', true);
+            statusDiv.style.display = 'none';
+
+            try {
+                // 1. Get Challenge
+                const resp = await fetch('/webauthn/register/challenge', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user: email })
+                });
+
+                if (!resp.ok) throw new Error('Falha ao iniciar registro');
+                const options = await resp.json();
+
+                // 2. Browser Interaction
+                const attResp = await startRegistration({ optionsJSON: options });
+
+                // 3. Verify
+                const verificationResp = await fetch('/webauthn/register/verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user: email, ...attResp })
+                });
+
+                const verificationJSON = await verificationResp.json();
+
+                if (verificationJSON.success) {
+                    statusDiv.textContent = '✅ Passkey registrada com sucesso!';
+                    statusDiv.style.color = 'var(--success)';
+                    statusDiv.style.display = 'block';
+                } else {
+                    throw new Error(verificationJSON.message);
+                }
+
+            } catch (error) {
+                console.error(error);
+                statusDiv.textContent = '❌ Erro: ' + error.message;
+                statusDiv.style.color = 'var(--error)';
+                statusDiv.style.display = 'block';
+            } finally {
+                setLoading('btnPasskey', false);
+            }
+        }
+
 
         async function verifyToken() {
             // ... (rest logic same as before but keeping it simple for setup flow)

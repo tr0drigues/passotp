@@ -29,5 +29,16 @@ O artigo destaca a importância de entender o "Dynamic Truncation" e a vulnerabi
 *   **Ponto Chave do Artigo**: "A simple implementation might accept the same code multiple times within the 30s window."
 *   **Nossa Solução**: Diferente de implementações ingênuas, nós adicionamos explicitamente o `checkReplay(secret, token)` no [server.ts](file:///Volumes/DADOS/Projetos/otp/src/server.ts). Isso armazena o hash do token usado no Redis por 60s. Se o usuário tentar reenviar o mesmo token (ataque de interceptação), o Redis bloqueia (`NX` set fails), cumprindo rigorosamente a recomendação de segurança do artigo.
 
+## 4. RFC 8812: WebAuthn Algorithms (COSE)
+Esta RFC registra os algoritmos de assinatura e criptografia (COSE) usados em WebAuthn.
+
+| Requisito RFC 8812 / WebAuthn L3 | Implementação (`src/services/webauthn.service.ts`) | Status |
+| :--- | :--- | :--- |
+| **Algoritmos COSE** | Explicitamente configurados: **ES256 (-7)**, **RS256 (-257)** e **EdDSA (-8)**. | ✅ Conforme |
+| **User Verification** | Configurado como `preferred` (exige Biometria/PIN se disponível, mas não falha se indisponível, garantindo UX). | ✅ Conforme |
+| **Challenge-Response** | Challenges de 32 bytes gerados criptograficamente e armazenados com TTL (60s) no Redis. | ✅ Conforme |
+| **Origin Validation** | Validação estrita de `RP_ID` e `Expected Origin` (agora configuráveis via ENV para produção). | ✅ Conforme |
+| **Clone Detection** | Validamos o `signCount` (contador) da credencial. Se o contador decrescer ou for reutilizado, detectamos clonagem. | ✅ Conforme |
+
 ## Conclusão
-O sistema é **100% Compliant** com as RFCs 4226 e 6238. Além disso, excede a especificação básica ao implementar proteções de camada de aplicação (Rate Limiting, Replay Protection, Logging) que são sugeridas mas não obrigatórias nas RFCs.
+O sistema é **100% Compliant** com as RFCs 4226, 6238 e **8812**. Além disso, excede a especificação básica ao implementar proteções de camada de aplicação (Rate Limiting, Replay Protection, Logging) que são sugeridas mas não obrigatórias nas RFCs.
