@@ -8,7 +8,7 @@ Desenvolvido com foco em segurança ("Security by Design"), performance e privac
 
 ```mermaid
 graph TD
-    Client([User / Browser]) -->|HTTPS| Server[Node.js (Fastify)]
+    Client(["User / Browser"]) -->|HTTPS| Server["Node.js (Fastify)"]
     
     subgraph "Server Core"
         Server --> Auth[Auth Service]
