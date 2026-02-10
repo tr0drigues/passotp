@@ -94,6 +94,14 @@ export class WebAuthnService {
             await redis.del(`webauthn:challenge:${user}`);
 
             logger.info({ event: 'SETUP_COMPLETE', message: 'Passkey registered successfully', user });
+            logger.info({ event: 'SETUP_COMPLETE', message: 'Passkey registered successfully', user });
+
+            // Refresh/Set TTL (50 days)
+            const USER_TTL = 50 * 24 * 60 * 60;
+            await redis.expire(`webauthn:credentials:${user}`, USER_TTL);
+            // We should also refresh the main user record if it exists, to keep them in sync
+            await redis.expire(`user:${user}`, USER_TTL);
+
             return true;
         }
 
@@ -154,9 +162,10 @@ export class WebAuthnService {
                     counter: credentialObj.counter,
                     transports: credentialObj.transports,
                 },
+                requireUserVerification: true, // UV required (biometrics/PIN)
             });
         } catch (error) {
-            logger.error({ event: 'AUTH_FAIL', message: 'WebAuthn login failed', user, meta: { error } });
+            logger.error({ event: 'AUTH_FAIL', message: 'WebAuthn verification failed', user, meta: { error } });
             throw error;
         }
 
@@ -168,6 +177,12 @@ export class WebAuthnService {
             await this.updateCredential(user, credentialObj);
 
             await redis.del(`webauthn:challenge:${user}`);
+
+            // Refresh TTL (50 days)
+            const USER_TTL = 50 * 24 * 60 * 60;
+            await redis.expire(`webauthn:credentials:${user}`, USER_TTL);
+            await redis.expire(`user:${user}`, USER_TTL);
+            await redis.expire(`recovery:${user}`, USER_TTL);
 
             return true;
         }

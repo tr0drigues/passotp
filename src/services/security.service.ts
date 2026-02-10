@@ -1,5 +1,6 @@
 
 import redis from '../lib/redis.js';
+import { authenticator } from 'otplib';
 
 export class SecurityService {
     /**
@@ -8,11 +9,17 @@ export class SecurityService {
      * Limite: 5 tentativas
      * Retorna true se estiver permitido, false se bloqueado
      */
-    async checkRateLimit(ipOrUser: string, limit: number = 5, windowSeconds: number = 300): Promise<{ allowed: boolean; banExpires?: number }> {
-        const key = `ratelimit:${ipOrUser}`;
+    /**
+     * Verifica Rate Limit (Tentativas de Login/Validação)
+     * Janela de tempo: 5 minutos
+     * Limite: 5 tentativas
+     * Retorna true se estiver permitido, false se bloqueado
+     */
+    async checkRateLimit(identifier: string, limit: number = 5, windowSeconds: number = 300): Promise<{ allowed: boolean; banExpires?: number }> {
+        const key = `ratelimit:${identifier}`;
 
         // Check if currently banned
-        const banKey = `ban:${ipOrUser}`;
+        const banKey = `ban:${identifier}`;
         const banTTL = await redis.ttl(banKey);
         if (banTTL > 0) {
             return { allowed: false, banExpires: banTTL };
@@ -39,16 +46,18 @@ export class SecurityService {
     }
 
     /**
-     * Prevenção de Replay Attack
-     * Armazena o token usado no Redis com TTL igual à janela do TOTP (30s)
-     * Retorna true se o token validou e NÃO foi usado antes.
-     * Retorna false se o token já foi usado.
+     * Prevenção de Replay Attack (Refatorado)
+     * Utiliza ID do usuário + Time Step para chave de controle.
+     * Chave: `replay:{userId}:{step}`
+     * Atomicidade: SET ... NX EX 60
      */
-    async checkReplay(secret: string, token: string): Promise<boolean> {
-        const key = `replay:${secret}:${token}`;
+    async checkReplay(userId: string): Promise<boolean> {
+        // Calculate current step (30s window)
+        const step = Math.floor(Date.now() / 1000 / 30);
+        const key = `replay:${userId}:${step}`;
 
-        // Tenta setar a chave apenas se não existir (NX)
-        // Expira em 30s (janela padrão do TOTP) + margem de segurança (totais 60s)
+        // Attempt to set key. If it exists (0), it fails (returns null/0).
+        // 60s TTL to ensure it covers the window + skew.
         const result = await redis.set(key, '1', 'EX', 60, 'NX');
 
         return result === 'OK';

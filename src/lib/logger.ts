@@ -1,6 +1,6 @@
 
 export type LogLevel = 'info' | 'warn' | 'error' | 'fatal';
-export type SecurityEvent = 'AUTH_SUCCESS' | 'AUTH_FAIL' | 'SETUP_INIT' | 'SETUP_COMPLETE' | 'RATE_LIMIT' | 'REPLAY_ATTACK' | 'RECOVERY_USE' | 'NEW_DEVICE' | 'SYSTEM_START';
+export type SecurityEvent = 'AUTH_SUCCESS' | 'AUTH_FAIL' | 'SETUP_INIT' | 'SETUP_COMPLETE' | 'RATE_LIMIT' | 'RATE_LIMIT_IP' | 'RATE_LIMIT_USER' | 'REPLAY_ATTACK' | 'RECOVERY_USE' | 'NEW_DEVICE' | 'SYSTEM_START';
 
 interface LogPayload {
     event: SecurityEvent;

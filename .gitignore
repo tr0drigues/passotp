@@ -9,3 +9,15 @@ test-results/
 playwright-report/
 blob-report/
 playwright/.cache/
+compliance_report.md
+# Verification Reports & Logs
+compliance_report.md
+security_report.md
+final_verification_report.md
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local Documentation
+docs/

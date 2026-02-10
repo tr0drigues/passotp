@@ -11,10 +11,16 @@ import { recoveryService } from './services/recovery.service.js'; // New Service
 import { webauthnService } from './services/webauthn.service.js'; // New Service
 import { logger } from './lib/logger.js'; // New Logger
 import redis from './lib/redis.js';
+import { encryptionService } from './services/encryption.service.js';
+import fastifyCookie from '@fastify/cookie';
+import fastifyHelmet from '@fastify/helmet';
 
 // Setup paths
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Redis TTL: 50 days in seconds
+const USER_TTL = 50 * 24 * 60 * 60;
 
 const fastify = Fastify({
     logger: false // Disable default logger to use custom JSON logger
@@ -22,6 +28,12 @@ const fastify = Fastify({
 
 // Plugins
 fastify.register(cors);
+fastify.register(fastifyHelmet, { contentSecurityPolicy: false }); // Disable CSP for simplicity in this demo, or configure it.
+fastify.register(fastifyCookie, {
+    secret: process.env.SESSION_SECRET || 'supersecret-fallback-key-change-me', // User should set this
+    hook: 'onRequest',
+});
+
 fastify.register(fastifyStatic, {
     root: path.join(__dirname, '../public'),
     prefix: '/',
@@ -55,11 +67,18 @@ fastify.post('/setup', async (request, reply) => {
     // 4. Gerar Recovery Codes
     const recoveryCodes = totpService.generateRecoveryCodes();
 
-    // 5. Salvar Segredo no Redis
-    await redis.hset(`user:${user}`, { secret });
+    // 5. Salvar Segredo no Redis (Encriptado)
+    const encryptedSecret = encryptionService.encrypt(secret);
+    await redis.hset(`user:${user}`, { secret: encryptedSecret });
 
     // 6. Salvar Recovery Codes (Hashed)
+    // 6. Salvar Recovery Codes (Hashed)
     await recoveryService.saveRecoveryCodes(user, recoveryCodes);
+
+    // 7. Set Expiration (50 days)
+    await redis.expire(`user:${user}`, USER_TTL);
+    await redis.expire(`recovery:${user}`, USER_TTL);
+    await redis.expire(`webauthn:credentials:${user}`, USER_TTL);
 
     return { secret, qrCode, recoveryCodes };
 });
@@ -78,13 +97,26 @@ fastify.post('/login', async (request, reply) => {
         user, ip, userAgent
     });
 
-    // 1. Check Rate Limit
-    const { allowed, banExpires } = await securityService.checkRateLimit(userIdentifier);
-    if (!allowed) {
-        logger.warn({ event: 'RATE_LIMIT', message: 'Rate limit exceeded', user, ip, meta: { banExpires } });
+    // 1. Check Rate Limit (Dual Layer: IP & User)
+    // Layer 1: IP Rate Limit (DDoS / Brute Force protection)
+    const ipLimit = await securityService.checkRateLimit(`ip:${ip}`);
+    if (!ipLimit.allowed) {
+        logger.warn({ event: 'RATE_LIMIT_IP', message: 'IP Rate limit exceeded', user, ip, meta: { banExpires: ipLimit.banExpires } });
         return reply.status(429).send({
             success: false,
-            message: `Muitas tentativas. Tente novamente em ${Math.ceil(banExpires!)} segundos.`
+            message: `Muitas tentativas. Tente novamente em ${Math.ceil(ipLimit.banExpires!)} segundos.`
+        });
+    }
+
+    // Layer 2: User Rate Limit (Credential Stuffing protection)
+    const userLimit = await securityService.checkRateLimit(`user:${user}`);
+    if (!userLimit.allowed) {
+        logger.warn({ event: 'RATE_LIMIT_USER', message: 'User Rate limit exceeded', user, ip, meta: { banExpires: userLimit.banExpires } });
+        // We generically blame "credentials" or "attempts" to not confirm user existence,
+        // but 429 is clearly a rate limit.
+        return reply.status(429).send({
+            success: false,
+            message: `Muitas tentativas para este usuário. Aguarde ${Math.ceil(userLimit.banExpires!)} segundos.`
         });
     }
 
@@ -110,34 +142,56 @@ fastify.post('/login', async (request, reply) => {
 
     // 2. Buscar Segredo do Usuário
     const userData = await redis.hgetall(`user:${user}`);
+
+    // Generic error message for Account Enumeration prevention
+    // We should ideally use constant time comparison or random delay, but for now generic message is step 1.
+    const GENERIC_ERROR = 'Credenciais inválidas.';
+
     if (!userData || !userData.secret) {
-        logger.error({ event: 'AUTH_FAIL', message: 'User not found', user, ip });
-        return reply.status(404).send({
-            success: false,
-            message: 'Usuário não encontrado ou 2FA não configurado.'
-        });
+        // User not found
+        logger.warn({ event: 'AUTH_FAIL', message: 'User not found (Generic logic)', user, ip });
+        // Fake verification time? 
+        return reply.status(401).send({ success: false, message: GENERIC_ERROR });
     }
-    const secret = userData.secret;
+
+    let secret: string;
+    try {
+        secret = encryptionService.decrypt(userData.secret);
+    } catch (e) {
+        // Generic Error for decryption failure to avoid Oracle
+        logger.error({ event: 'AUTH_FAIL', message: 'Internal decryption error', user });
+        return reply.status(401).send({ success: false, message: GENERIC_ERROR });
+    }
 
     // 3. Validar Token TOTP
     const isValid = totpService.verifyToken(token, secret);
     if (!isValid) {
         logger.warn({ event: 'AUTH_FAIL', message: 'Invalid TOTP code', user, ip });
-        return reply.status(401).send({
-            success: false,
-            message: 'Código inválido.'
-        });
+        return reply.status(401).send({ success: false, message: GENERIC_ERROR });
     }
 
-    // 4. Replay Check
-    const isFresh = await securityService.checkReplay(secret, token);
+    // 4. Replay Check (Atomic User Step)
+    // Pass just user ID, not the secret.
+    // Logic: `replay:{user}:{step}`
+    const isFresh = await securityService.checkReplay(user);
     if (!isFresh) {
-        logger.warn({ event: 'REPLAY_ATTACK', message: 'Replay attack detected', user, ip });
-        return reply.status(401).send({
-            success: false,
-            message: 'Este código já foi utilizado.'
-        });
+        logger.warn({ event: 'REPLAY_ATTACK', message: 'Replay attack detected (Step Reuse)', user, ip });
+        return reply.status(401).send({ success: false, message: GENERIC_ERROR });
     }
+
+    // Success - Set Session Cookie
+    reply.setCookie('session', user, {
+        path: '/',
+        httpOnly: true,
+        secure: true, // Requires HTTPS (or localhost)
+        sameSite: 'strict',
+        maxAge: 3600 // 1 hour
+    });
+
+    // Refresh TTL on successful login
+    await redis.expire(`user:${user}`, USER_TTL);
+    await redis.expire(`recovery:${user}`, USER_TTL);
+    await redis.expire(`webauthn:credentials:${user}`, USER_TTL);
 
     logger.info({ event: 'AUTH_SUCCESS', message: 'User authenticated successfully', user, ip });
     return {
@@ -182,9 +236,11 @@ fastify.post('/webauthn/login/challenge', async (request, reply) => {
         const options = await webauthnService.generateLoginOptions(user);
         return options;
     } catch (err: any) {
-        // Se usuário não tiver passkeys, retornamos 400 para o frontend saber e dar msg amigável
-        reply.status(400);
-        return { success: false, message: 'Nenhuma Passkey encontrada para este usuário.' };
+        // Se usuário não tiver passkeys, retornamos erro genérico para evitar user enumeration
+        // Idealmente, deveríamos retornar um challenge "falso" para o browser abrir o prompt e falhar depois,
+        // mas por enquanto vamos padronizar a mensagem.
+        reply.status(400); // Bad Request ou 401
+        return { success: false, message: 'Não foi possível iniciar a autenticação.' };
     }
 });
 
