@@ -9,25 +9,28 @@ Este projeto implementa um sistema de Autenticação Multi-Fator (MFA) moderno, 
 
 ## 🏗️ Arquitetura de Referência
 
-A solução roda totalmente em containers Docker, com um proxy reverso Nginx gerenciando a segurança de borda.
+A solução adota uma arquitetura de "Defense in Depth", onde cada camada possui responsabilidades de segurança específicas.
 
 ```mermaid
 graph TD
     Client(["👤 User / Browser"]) 
     
     subgraph "Infrastructure (Docker Compose)"
-        Nginx["🌐 Nginx Reverse Proxy\n(Port 80)"]
+        style Nginx fill:#fff,stroke:#009639,stroke-width:2px
+        Nginx["<img src='https://cdn.simpleicons.org/nginx/009639' width='20' /> <b>Nginx Reverse Proxy</b><br/>(Port 80)<br/>Termination SSL / Headers"]
         
         subgraph "Application Layer"
-            Node["🟢 Node.js (Fastify)\n(Internal: 3000)"]
+            style Node fill:#fff,stroke:#339933,stroke-width:2px
+            Node["<img src='https://cdn.simpleicons.org/nodedotjs/339933' width='20' /> <b>Node.js (Fastify)</b><br/>(Internal: 3000)"]
         end
         
         subgraph "Persistence Layer"
-            Redis[("🔴 Redis\n(Session / Secrets / Cache)")]
+            style Redis fill:#fff,stroke:#DC382D,stroke-width:2px
+            Redis[("<img src='https://cdn.simpleicons.org/redis/DC382D' width='20' /> <b>Redis</b><br/>(Session / Secrets / Cache)")]
         end
     end
 
-    Client -->|HTTP/HTTPS| Nginx
+    Client -->|HTTPS| Nginx
     Nginx -->|Proxy Pass| Node
     Node -->|Read/Write| Redis
 
@@ -47,53 +50,72 @@ graph TD
 | **Infra** | ![Docker](https://img.shields.io/badge/-Docker-2496ED?style=flat&logo=docker&logoColor=white) ![Nginx](https://img.shields.io/badge/-Nginx-009639?style=flat&logo=nginx&logoColor=white) | Containerização e Proxy Reverso. |
 | **Auth** | ![WebAuthn](https://img.shields.io/badge/-WebAuthn-orange?style=flat) | Autenticação Biométrica FIDO2. |
 
-## 📦 Como Rodar
+## 🛡️ Funcionalidades de Segurança (Deep Dive)
 
-A aplicação foi desenhada para rodar via **Docker Compose**, o que garante que todas as variáveis de ambiente e configurações de rede (Nginx -> Node) funcionem corretamente.
+Abaixo detalhamos as implementações de segurança para fins educativos:
 
-### 1. Configure as Variáveis
-Crie o arquivo `.env` na raiz:
+1.  **Criptografia em Repouso**: Segredos TOTP nunca são salvos em texto plano. Utilizamos **AES-256-GCM** com uma chave de 32 bytes (`ENCRYPTION_KEY`) antes da persistência no Redis.
+2.  **Proteção de Replay Atômica**: Prevenimos reutilização de tokens OTP usando uma chave `replay:{userId}:{step}` no Redis com operação atômica `SET NX`.
+3.  **Privacidade (Account Enumeration)**:
+    - Respostas genéricas (`401 Credenciais inválidas`).
+    - **Timing Attack Protection**: Delay artificial constante (ex: 200ms) em *todas* as falhas de autenticação.
+4.  **Sessão Segura**: 
+    - IDs de sessão aleatórios (UUIDv4).
+    - Cookie `session` assinado, `HttpOnly`, `Secure` e `SameSite=Strict` (ou `Lax` dependendo do fluxo).
+5.  **Auto-Remoção de Inatividade**: Dados de usuários inativos são automaticamente expurgados do Redis via TTL (Time-To-Live).
+6.  **WebAuthn Hardening**: Validação estrita de Challenge e Integridade de Counters para evitar clonagem de autenticadores.
+7.  **Rate Limiting Duplo**:
+    - **Por IP**: Proteção contra DDoS/Brute-Force.
+    - **Por Usuário**: Proteção contra Credential Stuffing.
+8.  **Hardening HTTP (Nginx + Helmet)**:
+    - **Nginx**: Atua como *TLS Termination Proxy*, removendo a carga de criptografia da aplicação Node.js.
+    - **CSP (Content Security Policy)**: Prevenção de XSS.
 
-```bash
-cp .env.example .env
-```
+## 📦 Como Rodar (Local)
 
-**Variáveis Importantes:**
-- `WEBAUTHN_ORIGIN`: Deve ser `http://localhost` (sem porta, pois o Nginx roda na 80).
-- `ENCRYPTION_KEY`: Chave HEX de 32 bytes para criptografar segredos no Redis.
+Utilizamos Docker Compose para simular o ambiente de produção.
 
-### 2. Suba os Containers
-```bash
-docker-compose up -d --build
-```
+1.  **Configure o Ambiente**:
+    ```bash
+    cp .env.example .env
+    ```
+    > Ajuste `WEBAUTHN_ORIGIN=http://localhost` para rodar localmente via Nginx.
 
-### 3. Acesse a Aplicação
-Abra no navegador:
-👉 **http://localhost**
+2.  **Suba a infraestrutura**:
+    ```bash
+    docker-compose up -d --build
+    ```
 
-- **Setup (2FA/Passkey)**: `http://localhost/setup`
-- **Login**: `http://localhost/login.html`
+3.  **Acesse**:
+    👉 **http://localhost** (Porta 80)
+    
+    *O Nginx redirecionará internamente para o Node.js na porta 3000.*
 
-> **Nota**: Não acesse via porta 3000. O acesso direto é bloqueado ou pode causar erros de CORS/WebAuthn. Use sempre a porta 80 (Nginx).
+## ⚠️ Guia de Produção (Deployment)
 
-## 🛡️ Funcionalidades de Segurança
+Ao levar esta arquitetura para produção (AWS, Azure, DigitalOcean), considere:
 
-1.  **Criptografia em Repouso**: Segredos TOTP são encriptados com **AES-256-GCM** antes de ir para o Redis.
-2.  **WebAuthn/Passkeys**: Suporte completo a login biométrico (TouchID/FaceID).
-    - *Configuração relaxada de UV (User Verification) para maior compatibilidade.*
-3.  **Proteção de Replay**: Bloqueio atômico de tokens OTP já utilizados.
-4.  **Rate Limiting**:
-    - Proteção por IP (DDoS).
-    - Proteção por Usuário (Credential Stuffing).
-5.  **Hardening HTTP**:
-    - **Nginx**: Headers de segurança, mascaramento do backend.
-    - **CSP**: Política restritiva contra XSS.
+### 1. HTTPS & SSL
+Em produção, o Nginx (ou Load Balancer como AWS ALB) deve tratar o SSL.
+- A aplicação Node.js continua rodando em HTTP (porta interna).
+- Configure o Nginx para passar o header `X-Forwarded-Proto: https`.
+- A aplicação confiará neste header devido à configuração `trustProxy: true`.
 
-## 🧪 Desenvolvimento e Testes
+### 2. Gestão de Segredos Segura
+**Jamais use arquivos `.env` em produção.**
+- **Docker Swarm / K8s**: Use *Secrets* (`/run/secrets/encryption_key`).
+- **Cloud (AWS/GCP)**: Use *Parameter Store* ou *Secret Manager* e injete como variáveis de ambiente em tempo de execução.
+- **Rotação de Chaves**: A `ENCRYPTION_KEY` é crítica. Se for comprometida, todos os segredos TOTP precisarão ser re-gerados (ou re-encriptados).
 
-Para rodar scripts de teste (e.g. testes de carga ou verificação de segurança), certifique-se de que eles apontem para `http://localhost` (Nginx).
+### 3. Persistência
+O Redis configurado neste docker-compose não tem persistência em disco habilitada por padrão (`appendonly no`).
+- **Produção**: Use AWS ElastiCache ou configure o Redis com volumes persistentes (`AOF` ou `RDB`) para não perder sessões/cadastros ao reiniciar.
 
-```bash
-# Exemplo: Teste de recuperação
-npx tsx scripts/test-recovery.ts
-```
+### 4. CORS
+Configure `CORS_ORIGIN` estritamente para o domínio do seu frontend (ex: `https://app.suaempresa.com`).
+
+## 🧪 Ferramentas de Desenvolvimento
+
+A pasta `scripts/` contém utilitários para testar e auditar o sistema:
+- `migration-ttl.ts`: Ajusta políticas de expiração.
+- `test-recovery.ts`: Simula o fluxo de recuperação de conta (E2E).
