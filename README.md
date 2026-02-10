@@ -91,7 +91,52 @@ Utilizamos Docker Compose para simular o ambiente de produção.
     
     *O Nginx redirecionará internamente para o Node.js na porta 3000.*
 
-## ⚠️ Guia de Produção (Deployment)
+## 🔌 Arquitetura de Integração (Como Consumir)
+
+Este serviço foi projetado para operar como um **Microserviço de Autenticação** independente. Sua aplicação principal ("Consumer App") delega a responsabilidade de MFA e Passkeys para ele via API REST.
+
+### Fluxo de Validação (Sequence Diagram)
+
+O diagrama abaixo ilustra como uma aplicação legada ou nova deve consumir este serviço para validar um login:
+
+```mermaid
+sequenceDiagram
+    participant User as 👤 Usuário
+    participant Frontend as 📱 Sua App (Frontend)
+    participant Backend as ⚙️ Sua App (Backend)
+    participant Auth as 🛡️ Auth Service (Este Projeto)
+
+    User->>Frontend: Digita Login + Senha
+    Frontend->>Backend: POST /login (credenciais básicas)
+    Backend->>Backend: Valida Senha (LDAP/DB)
+    
+    rect rgb(20, 20, 20)
+        note right of Backend: 🔓 Início do Fluxo MFA
+        Backend-->>Frontend: 200 OK (Requer 2FA)
+        
+        Frontend->>User: Solicita Token TOTP ou Biometria
+        User->>Frontend: Insere Token / TouchID
+        
+        Frontend->>Backend: POST /verify-2fa { token, user }
+        
+        Backend->>Auth: POST /verify (backend-to-backend)
+        Note over Backend,Auth: Payload: { token, secret, user }
+        Auth-->>Backend: { success: true }
+    end
+    
+    Backend->>Frontend: 200 OK (Login Completo + JWT)
+    Frontend->>User: Redireciona para Dashboard
+```
+
+### Endpoints Principais para Integração
+
+| Método | Endpoint | Descrição | Integração Sugerida |
+|--------|----------|-----------|---------------------|
+| `POST` | `/setup` | Gera Segredo TOTP e QR Code | Chamado pelo seu Backend quando o usuário ativa 2FA. |
+| `POST` | `/verify` | Valida um token TOTP (6 dígitos) | Chamado pelo seu Backend a cada login. Seu Backend armazena o `secret`. |
+| `POST` | `/webauthn/*` | Fluxo completo de Passkeys | Chamado diretamente pelo Frontend (ou via proxy) para registro/login biométrico. |
+
+> **Nota**: Para **WebAuthn**, o `Auth Service` gerencia o estado das credenciais (public keys, counters) internamente no Redis, simplificando a lógica no seu Backend.
 
 Ao levar esta arquitetura para produção (AWS, Azure, DigitalOcean), considere:
 
