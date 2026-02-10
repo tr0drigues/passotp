@@ -14,7 +14,8 @@ export class TotpService {
      * Gera a URI de autenticação (otpauth://) para ser usada em QR Codes
      */
     getOtpAuthKey(user: string, secret: string) {
-        return authenticator.keyuri(user, 'MyApp-2FA', secret);
+        // Alterar 'SecureAuth-2FA' para o nome da sua aplicação
+        return authenticator.keyuri(user, 'SecureAuth-2FA', secret);
     }
 
     /**
