@@ -9,9 +9,11 @@ import { logger } from '../lib/logger.js';
 import redis from '../lib/redis.js';
 
 // Configuration
+// Configuration
 const RP_NAME = process.env.WEBAUTHN_RP_NAME || 'SecureAuth-2FA';
 const RP_ID = process.env.WEBAUTHN_RP_ID || 'localhost';
 const ORIGIN = process.env.WEBAUTHN_ORIGIN || 'http://localhost';
+const REQUIRE_UV = process.env.WEBAUTHN_REQUIRE_UV === 'true'; // Default false if not set, but recommended true in prod
 
 export class WebAuthnService {
 
@@ -39,7 +41,7 @@ export class WebAuthnService {
             })),
             authenticatorSelection: {
                 residentKey: 'preferred',
-                userVerification: 'preferred',
+                userVerification: REQUIRE_UV ? 'required' : 'preferred',
                 // authenticatorAttachment: 'cross-platform', 
             },
         });
@@ -68,7 +70,7 @@ export class WebAuthnService {
                 expectedChallenge,
                 expectedOrigin: ORIGIN,
                 expectedRPID: RP_ID,
-                requireUserVerification: false,
+                requireUserVerification: REQUIRE_UV,
             });
         } catch (error) {
             logger.error({ event: 'AUTH_FAIL', message: 'WebAuthn verification failed', user, meta: { error } });
@@ -94,7 +96,6 @@ export class WebAuthnService {
             // Limpa o challenge
             await redis.del(`webauthn:challenge:${user}`);
 
-            logger.info({ event: 'SETUP_COMPLETE', message: 'Passkey registered successfully', user });
             logger.info({ event: 'SETUP_COMPLETE', message: 'Passkey registered successfully', user });
 
             // Refresh/Set TTL (50 days)
@@ -128,7 +129,7 @@ export class WebAuthnService {
                 id: cred.id,
                 transports: cred.transports,
             })),
-            userVerification: 'preferred',
+            userVerification: REQUIRE_UV ? 'required' : 'preferred',
         });
 
         await redis.set(`webauthn:challenge:${user}`, options.challenge, 'EX', 60);
@@ -163,7 +164,7 @@ export class WebAuthnService {
                     counter: credentialObj.counter,
                     transports: credentialObj.transports,
                 },
-                requireUserVerification: false,
+                requireUserVerification: REQUIRE_UV,
             });
         } catch (error) {
             logger.error({ event: 'AUTH_FAIL', message: 'WebAuthn verification failed', user, meta: { error } });

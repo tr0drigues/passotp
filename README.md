@@ -40,6 +40,36 @@ graph TD
     Node --> WebAuthn["🔑 WebAuthn Service"]
 ```
 
+---
+
+## 🛠️ Modo Dev vs Prod
+
+O sistema possui "Break-glass Flags" para facilitar o desenvolvimento, mas que **devem ser evitados em produção**.
+
+| Variável | Padrão (Prod) | Descrição | Risco |
+|----------|---------------|-----------|-------|
+| `NODE_ENV` | `production` | Define otimizações e checagens de segurança. | Alto se != production |
+| `ALLOW_DEBUG_SETUP_OUTPUT` | `false` | Se `true`, `/setup` retorna `secret` em texto puro. | **Crítico** (Vazamento de Secret) |
+| `ENABLE_DEV_VERIFY_ENDPOINT` | `false` | Se `true`, habilita `/verify`. | Alto (Bypass de Sessão) |
+| `I_KNOW_WHAT_IM_DOING` | `false` | **Obrigatório** estar `true` para ativar qualquer flag debug acima em Prod. | Trava de Segurança |
+
+---
+
+## ✅ Go-Live Checklist (Produção)
+
+Antes de ir para produção, verifique:
+
+1.  [ ] **HTTPS Ativo**: O serviço roda atrás de um proxy (Nginx/AWS ALB) com SSL.
+2.  [ ] **Environment**: `NODE_ENV=production`.
+3.  [ ] **Encryption Key**: `ENCRYPTION_KEY` definida (32 bytes hex) e **segura**.
+4.  [ ] **Secrets**: `SESSION_SECRET` forte e único.
+5.  [ ] **CORS**: `FRONTEND_ORIGIN` configurado corretamente (ex: `https://app.com`).
+6.  [ ] **WebAuthn**: `WEBAUTHN_REQUIRE_UV=true` (Recomendado) e `WEBAUTHN_ORIGIN` correto.
+7.  [ ] **Debug Flags**: Todas as flags `ALLOW_DEBUG...` removidas ou `false`.
+8.  [ ] **Redis**: Senha configurada (`REDIS_PASSWORD`) se não estiver em rede isolada.
+
+---
+
 ## 🚀 Tecnologias
 
 | Componente | Tecnologia | Função |
@@ -183,41 +213,32 @@ Chamado pelo seu Backend quando o usuário ativa o 2FA.
 }
 ```
 
-**Response (200 OK):**
+**Response (Prod - Padrão):**
 ```json
 {
-  "secret": "JBSWY3DPEHPK3PXP",       // Salve isso no seu Banco de Dados!
-  "otpAuth": "otpauth://totp/...",    // URI padrão (caso queira gerar seu próprio QR)
-  "qrCode": "data:image/png;base64,..", // Imagem pronta para exibir no Frontend
-  "recoveryCodes": ["A1B2-C3D4", ...] // Códigos de backup para o usuário salvar
+  "qrCode": "data:image/png;base64,iVBORw0KGgo...", // Exibir no Frontend
+  "recoveryCodes": ["A1B2-C3D4", "E5F6-G7H8", ...] // Backup para o usuário
 }
 ```
+> **Nota de Segurança**: Em Produção, `secret` e `otpAuth` **não são retornados** para evitar vazamento. Se precisar deles para debugging, veja a seção [Modo Dev vs Prod](#modo-dev-vs-prod).
 
-### 2. Verify (Validar Token)
-Chamado pelo seu Backend a cada login. Você deve enviar o `secret` que salvou anteriormente.
+### 2. Verify (Test Only / Legacy)
+⚠ **Atenção**: Este endpoint é **desabilitado por padrão em produção** (retorna 404). Use o endpoint `/login` para validação real.
 
 **Request:** `POST /verify`
 ```json
 {
   "user": "usuario@exemplo.com",
-  "token": "123456",             // O código de 6 dígitos digitado pelo usuário
-  "secret": "JBSWY3DPEHPK3PXP"   // O segredo recuperado do seu Banco de Dados
+  "token": "123456",
+  "secret": "JBSWY3..." // Em Prod isso não está disponível no client!
 }
 ```
 
-**Response (200 OK):**
+**Response:**
 ```json
 {
   "success": true,
-  "message": "Código verificado com sucesso!"
-}
-```
-
-**Response (Erro - 400/401):**
-```json
-{
-  "success": false,
-  "message": "Código inválido."
+  "message": "Código verificado!"
 }
 ```
 
