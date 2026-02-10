@@ -16,17 +16,17 @@ graph TD
     Client(["👤 User / Browser"]) 
     
     subgraph "Infrastructure (Docker Compose)"
-        style Nginx fill:#fff,stroke:#009639,stroke-width:2px
-        Nginx["<img src='https://cdn.simpleicons.org/nginx/009639' width='20' /> <b>Nginx Reverse Proxy</b><br/>(Port 80)<br/>Termination SSL / Headers"]
+        style Nginx fill:#f9f9f9,stroke:#009639,stroke-width:2px
+        Nginx["🌐 <b>Nginx Reverse Proxy</b><br/>(Port 80)<br/>Termination SSL / Header"]
         
         subgraph "Application Layer"
-            style Node fill:#fff,stroke:#339933,stroke-width:2px
-            Node["<img src='https://cdn.simpleicons.org/nodedotjs/339933' width='20' /> <b>Node.js (Fastify)</b><br/>(Internal: 3000)"]
+            style Node fill:#eff,stroke:#339933,stroke-width:2px
+            Node["🟢 <b>Node.js (Fastify)</b><br/>(Internal: 3000)"]
         end
         
         subgraph "Persistence Layer"
-            style Redis fill:#fff,stroke:#DC382D,stroke-width:2px
-            Redis[("<img src='https://cdn.simpleicons.org/redis/DC382D' width='20' /> <b>Redis</b><br/>(Session / Secrets / Cache)")]
+            style Redis fill:#ffe,stroke:#DC382D,stroke-width:2px
+            Redis[("🔴 <b>Redis</b><br/>(Session / Secrets / Cache)")]
         end
     end
 
