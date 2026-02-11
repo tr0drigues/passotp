@@ -18,6 +18,32 @@
 
 ---
 
+## Visão Geral da Infraestrutura
+
+```mermaid
+graph TD
+    Client(["<img src='https://cdn.simpleicons.org/googlechrome/555' width='40' /><br/>Usuário / Browser"]) 
+    
+    subgraph "Infraestrutura PassOTP"
+        style Nginx fill:#fff,stroke:#333,stroke-width:2px
+        Nginx["<img src='https://cdn.simpleicons.org/nginx/009639' width='40' /><br/>Nginx / Ingress<br/>(Terminação TLS)"]
+        
+        subgraph "Aplicação"
+            style Node fill:#eff,stroke:#333,stroke-width:2px
+            Node["<img src='https://cdn.simpleicons.org/nodedotjs/339933' width='40' /><br/>Serviço PassOTP<br/>(Node.js / Fastify)"]
+        end
+        
+        subgraph "Persistência"
+            style Redis fill:#ffe,stroke:#333,stroke-width:2px
+            Redis[("<img src='https://cdn.simpleicons.org/redis/DC382D' width='40' /><br/>Redis<br/>(Sessões / Segredos)")]
+        end
+    end
+
+    Client -->|HTTPS| Nginx
+    Nginx -->|Proxy Reverso| Node
+    Node -->|Ops Encriptadas| Redis
+```
+
 ## Arquitetura e Objetivos de Design
 
 Implementar MFA corretamente exige lidar com complexidade significativa além da geração de tokens. O PassOTP resolve estes desafios sistêmicos:
@@ -34,10 +60,7 @@ O PassOTP foi projetado para ser o serviço de responsabilidade única para 2FA,
 O PassOTP implementa uma estratégia de defesa em profundidade.
 
 - **Modelo de Ameaças**: Veja [SECURITY.md](SECURITY.md) (em inglês) para detalhes de como mitigamos Força Bruta, Ataques de Replay e Enumeração.
-- **Decisões de Arquitetura**:
-  - [ADR-001: Arquitetura Stateless com Redis](docs/adr/001-stateless-architecture.md)
-  - [ADR-002: Criptografia de Segredos (AES-256)](docs/adr/002-secret-encryption.md)
-  - [ADR-003: Política de WebAuthn](docs/adr/003-webauthn-policy.md)
+- **Decisões de Arquitetura**: Projetado como uma API Stateless com backing no Redis (App Stateless + Dados Stateful). Segredos encriptados com AES-256-GCM. WebAuthn exige Verificação de Usuário.
 
 ---
 
@@ -189,31 +212,7 @@ Antes de fazer o deploy para um ambiente público, verifique o seguinte:
 
 ---
 
-## Visão Geral da Infraestrutura
 
-```mermaid
-graph TD
-    Client(["Usuário / Browser"]) 
-    
-    subgraph "Infraestrutura PassOTP"
-        style Nginx fill:#f9f9f9,stroke:#333,stroke-width:2px
-        Nginx["Nginx / Load Balancer<br/>(Terminação TLS)"]
-        
-        subgraph "Aplicação"
-            style Node fill:#eff,stroke:#333,stroke-width:2px
-            Node["Serviço PassOTP<br/>(Node.js / Fastify)"]
-        end
-        
-        subgraph "Persistência"
-            style Redis fill:#ffe,stroke:#333,stroke-width:2px
-            Redis[("Redis<br/>(Sessões / Segredos)")]
-        end
-    end
-
-    Client -->|HTTPS| Nginx
-    Nginx -->|Proxy Reverso| Node
-    Node -->|Ops Encriptadas| Redis
-```
 
 ## Licença
 MIT

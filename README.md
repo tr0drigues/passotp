@@ -18,6 +18,32 @@
 
 ---
 
+## Infrastructure Overview
+
+```mermaid
+graph TD
+    Client(["<img src='https://cdn.simpleicons.org/googlechrome/555' width='40' /><br/>User / Browser"]) 
+    
+    subgraph "PassOTP Infrastructure"
+        style Nginx fill:#fff,stroke:#333,stroke-width:2px
+        Nginx["<img src='https://cdn.simpleicons.org/nginx/009639' width='40' /><br/>Nginx / Ingress<br/>(TLS Termination)"]
+        
+        subgraph "Application"
+            style Node fill:#eff,stroke:#333,stroke-width:2px
+            Node["<img src='https://cdn.simpleicons.org/nodedotjs/339933' width='40' /><br/>PassOTP Service<br/>(Node.js / Fastify)"]
+        end
+        
+        subgraph "Persistence"
+            style Redis fill:#ffe,stroke:#333,stroke-width:2px
+            Redis[("<img src='https://cdn.simpleicons.org/redis/DC382D' width='40' /><br/>Redis<br/>(Sessions / Secrets)")]
+        end
+    end
+
+    Client -->|HTTPS| Nginx
+    Nginx -->|Reverse Proxy| Node
+    Node -->|Encrypted Ops| Redis
+```
+
 ## Architecture & Design Goals
 
 Implementing MFA correctly requires handling significant complexity beyond token generation. PassOTP addresses these system-level challenges:
@@ -34,10 +60,7 @@ PassOTP is designed to be the single responsibility service for 2FA, decoupling 
 PassOTP implements a defense-in-depth strategy.
 
 - **Threat Model**: See [SECURITY.md](SECURITY.md) for details on how we mitigate Brute Force, Replay Attacks, and Enumeration.
-- **Architecture Decisions**:
-  - [ADR-001: Stateless Redis Architecture](docs/adr/001-stateless-architecture.md)
-  - [ADR-002: Secret Encryption (AES-256)](docs/adr/002-secret-encryption.md)
-  - [ADR-003: WebAuthn Policy](docs/adr/003-webauthn-policy.md)
+- **Architecture Decisions**: Designed as a Stateless API backed by Redis (Stateless App + Stateful Data). Secrets are encrypted using AES-256-GCM. WebAuthn enforces User Verification.
 
 ---
 
@@ -189,31 +212,7 @@ Before deploying to a public environment, verify the following:
 
 ---
 
-## Infrastructure Overview
 
-```mermaid
-graph TD
-    Client(["User / Browser"]) 
-    
-    subgraph "PassOTP Infrastructure"
-        style Nginx fill:#f9f9f9,stroke:#333,stroke-width:2px
-        Nginx["Nginx / Load Balancer<br/>(TLS Termination)"]
-        
-        subgraph "Application"
-            style Node fill:#eff,stroke:#333,stroke-width:2px
-            Node["PassOTP Service<br/>(Node.js / Fastify)"]
-        end
-        
-        subgraph "Persistence"
-            style Redis fill:#ffe,stroke:#333,stroke-width:2px
-            Redis[("Redis<br/>(Sessions / Secrets)")]
-        end
-    end
-
-    Client -->|HTTPS| Nginx
-    Nginx -->|Reverse Proxy| Node
-    Node -->|Encrypted Ops| Redis
-```
 
 ## License
 MIT
