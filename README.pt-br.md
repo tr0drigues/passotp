@@ -54,16 +54,23 @@ O PassOTP implementa uma estratégia de defesa em profundidade.
 ---
 
 ## Quickstart (Deploy)
-
-Este guia assume um ambiente com Docker e Docker Compose.
-
-1.  **Clone e Configure**:
-    ```bash
-    git clone https://github.com/tr0drigues/passotp.git
-    cd passotp
-    cp .env.example .env
-    # Edite o .env para definir sua ENCRYPTION_KEY (32 bytes) e segredos seguros
-    ```
+ 
+ 🚀 **Pronto para Produção?** Escolha seu caminho de deploy:
+ 
+ [![Kubernetes](https://img.shields.io/badge/Kubernetes-Guia%20de%20Deploy-326ce5?style=for-the-badge&logo=kubernetes)](DEPLOY_K8S.md)
+ [![Docker Compose](https://img.shields.io/badge/Docker-Guia%20de%20Deploy-2496ed?style=for-the-badge&logo=docker)](DEPLOY_DOCKER.md)
+ 
+ ### Desenvolvimento Local (Teste Rápido)
+ 
+ Este guia assume um ambiente com Docker e Docker Compose para um teste rápido local.
+ 
+ 1.  **Clone e Configure**:
+     ```bash
+     git clone https://github.com/tr0drigues/passotp.git
+     cd passotp
+     cp .env.example .env
+     # Edite o .env para definir sua ENCRYPTION_KEY (32 bytes) e segredos seguros
+     ```
 
 2.  **Inicie os Serviços**:
     ```bash

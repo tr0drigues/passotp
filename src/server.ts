@@ -96,6 +96,11 @@ fastify.register(fastifyStatic, {
     prefix: '/',
 });
 
+// Health Check
+fastify.get('/health', async () => {
+    return { status: 'ok' };
+});
+
 // Register Routes
 fastify.register(setupRoutes);
 fastify.register(authRoutes);

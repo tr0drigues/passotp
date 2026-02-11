@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: passotp-app
+  namespace: default
+  labels:
+    app: passotp-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: passotp-app
+  template:
+    metadata:
+      labels:
+        app: passotp-app
+    spec:
+      containers:
+        - name: passotp
+          image: passotp:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3000
+          envFrom:
+            - configMapRef:
+                name: passotp-config
+            - secretRef:
+                name: passotp-secret
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: passotp-service
+  namespace: default
+spec:
+  selector:
+    app: passotp-app
+  ports:
+    - protocol: TCP
+      port: 3000
+      targetPort: 3000
+  type: ClusterIP

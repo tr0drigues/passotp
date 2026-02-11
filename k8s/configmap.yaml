@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: passotp-config
+  namespace: default
+data:
+  NODE_ENV: "production"
+  CORS_ORIGIN: "https://otp.seudominio.com"
+  FRONTEND_ORIGIN: "https://otp.seudominio.com"
+  ALLOW_DEBUG_SETUP_OUTPUT: "false"
+  ENABLE_DEV_VERIFY_ENDPOINT: "false"
+  WEBAUTHN_RP_ID: "otp.seudominio.com"
+  WEBAUTHN_ORIGIN: "https://otp.seudominio.com"
+  WEBAUTHN_RP_NAME: "PassOTP"
+  REDIS_HOST: "passotp-redis"
+  REDIS_PORT: "6379"
