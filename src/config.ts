@@ -26,7 +26,7 @@ export const config = {
         enableDevVerify: process.env.ENABLE_DEV_VERIFY_ENDPOINT === 'true',
         confirmsRisk: process.env.I_KNOW_WHAT_IM_DOING === 'true',
         cors: {
-            allowedOrigins: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : [],
+            allowedOrigins: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',').map(o => o.trim()) : [],
             frontendOrigin: process.env.FRONTEND_ORIGIN
         }
     },

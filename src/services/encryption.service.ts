@@ -4,16 +4,20 @@ import { config } from '../config.js';
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 16;
-const SALT_LENGTH = 64;
-
-// Basic validation for encryption key availability
+// Strict Key Management
 const KEY = config.security.encryptionKey;
+const ALLOW_INSECURE = process.env.ALLOW_INSECURE_DEV_KEY === 'true';
+
 if (!KEY) {
-    if (config.env.isProduction) {
-        throw new Error('FATAL: ENCRYPTION_KEY is required in production.');
+    if (config.env.isProduction || !ALLOW_INSECURE) {
+        throw new Error(
+            'FATAL: ENCRYPTION_KEY is missing. In production, this is required. ' +
+            'In dev, set ALLOW_INSECURE_DEV_KEY=true to bypass (NOT RECOMMENDED).'
+        );
     }
-    console.warn('⚠️  WARNING: ENCRYPTION_KEY not found. Using insecure fallback for DEVELOPMENT only.');
+    console.warn('⚠️  WARNING: Using insecure fallback key. DO NOT USE IN PRODUCTION.');
 }
+
 const SAFE_KEY = KEY || '0'.repeat(64);
 
 export class EncryptionService {

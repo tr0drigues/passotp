@@ -114,7 +114,13 @@
 
                 currentSecret = data.secret;
                 document.getElementById('qrImage').src = data.qrCode;
-                document.getElementById('secretText').textContent = data.secret;
+
+                const secretDisplay = document.getElementById('secretText');
+                if (data.secret) {
+                    secretDisplay.textContent = data.secret;
+                } else {
+                    secretDisplay.innerHTML = '<span style="color: #94a3b8; font-style: italic;">(Hidden for Security - Scan QR)</span>';
+                }
 
                 // Show Recovery Codes
                 if (data.recoveryCodes) {
@@ -192,7 +198,6 @@
 
 
         async function verifyToken() {
-            // ... (rest logic same as before but keeping it simple for setup flow)
             const tokenInput = document.getElementById('token');
             const token = tokenInput.value.replace(/\s/g, '');
             const msg = document.getElementById('message');
@@ -201,23 +206,33 @@
             msg.style.display = 'none';
 
             try {
-                const res = await fetch('/verify', {
+                // Use /login endpoint (Production Ready) instead of /verify
+                const res = await fetch('/login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ token, secret: currentSecret, user: currentUser })
+                    body: JSON.stringify({ token, user: currentUser })
                 });
+
                 const data = await res.json();
                 await new Promise(r => setTimeout(r, 500));
 
-                msg.textContent = data.message;
+                if (res.ok && data.success) {
+                    msg.textContent = data.message;
+                    msg.className = 'success';
+                    tokenInput.style.borderColor = 'var(--success)';
+                } else {
+                    msg.textContent = data.message || 'Verification failed';
+                    msg.className = 'error';
+                    tokenInput.style.borderColor = 'var(--error)';
+                    tokenInput.classList.add('shake');
+                    setTimeout(() => tokenInput.classList.remove('shake'), 500);
+                }
                 msg.style.display = 'block';
-                msg.className = data.success ? 'success' : 'error';
-
-                if (data.success) { tokenInput.style.borderColor = 'var(--success)'; }
-                else { tokenInput.style.borderColor = 'var(--error)'; tokenInput.classList.add('shake'); setTimeout(() => tokenInput.classList.remove('shake'), 500); }
 
             } catch (e) {
-                msg.textContent = 'Connection error'; msg.className = 'error'; msg.style.display = 'block';
+                msg.textContent = 'Connection error: ' + e.message;
+                msg.className = 'error';
+                msg.style.display = 'block';
             } finally { setLoading('btnVerify', false); }
         }
 

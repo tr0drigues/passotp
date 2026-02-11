@@ -15,7 +15,8 @@ export type SecurityEvent =
     | 'SETUP_COMPLETE'
     | 'RECOVERY_USE'
     | 'SYSTEM_START'
-    | 'SECURITY_ALERT';
+    | 'SECURITY_ALERT'
+    | 'CORS_BLOCK';
 
 interface LogPayload {
     event: SecurityEvent;
